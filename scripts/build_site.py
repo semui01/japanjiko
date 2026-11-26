@@ -36,6 +36,13 @@ def main() -> None:
     sw = sw.replace("'__VERSION__'", json.dumps(version)).replace("__ASSETS__", json.dumps(assets, indent=2))
     (DOCS / "sw.js").write_text(sw, encoding="utf-8")
     (DOCS / ".nojekyll").write_text("", encoding="utf-8")
+    # If Pages is later switched to serve docs/ as the site root, links made while it served the
+    # repository root (…/japanjiko/docs/…) land here and are sent on to the app.
+    (DOCS / "docs").mkdir()
+    (DOCS / "docs" / "index.html").write_text(
+        '<!doctype html><meta charset="utf-8"><title>Redirect</title>'
+        "<script>location.replace('../' + location.search + location.hash)</script>"
+        '<meta http-equiv="refresh" content="0; url=../"><a href="../">Open the app</a>\n', encoding="utf-8")
     size = sum(p.stat().st_size for p in DOCS.rglob("*") if p.is_file())
     print(f"built docs/ — {len(assets)} cached files, {size / 1024:.0f} KB, cache version {version}")
 
