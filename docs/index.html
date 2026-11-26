@@ -1,350 +1,44 @@
 <!doctype html>
-<html lang="en">
+<html lang="ja">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Accidental deaths in Japan, 1899–2025</title>
-<meta name="description" content="An updated, interactive edition of MHLW's 2009 special report on accidental deaths in Japan, using final vital statistics to 2025.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Noto+Sans+JP:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,400&display=swap">
-<link rel="stylesheet" href="tokens.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
-<script>window.DASH_SOURCES = {"long_run": "data/long_run.csv", "by_type": "data/by_type.csv", "age_rates": "data/age_rates.csv", "traffic_mode": "data/traffic_mode.csv", "place": "data/place.csv", "home_type": "data/home_type.csv", "age_groups_2025": "data/age_groups_2025.csv", "detail_causes": "data/detail_causes.csv"};</script>
-<script src="dash-shim.js"></script>
+<title>日本の不慮の事故死亡統計 1899〜2025年</title>
+<meta name="description" content="厚生労働省「不慮の事故死亡統計」（平成21年度）を2025年の確定数で更新したインタラクティブ版。An interactive update of MHLW's 2009 report on accidental deaths in Japan, with final data to 2025.">
+<meta name="theme-color" content="#f5f6f8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1116" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="不慮の事故統計">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="styles.css">
+<script src="vendor/d3.v7.9.0.min.js" defer></script>
+<script type="module" src="js/main.js"></script>
 </head>
 <body>
-<div id="dash-root">
-<meta name="dash-one-writer">
-<meta name="dash-form" content="freeform">
-<link rel="stylesheet" href="app.css">
-
-<article class="jk" lang="en" data-read>
-
-  <header class="jk-head" id="top">
-    <p class="jk-eyebrow">Vital Statistics of Japan <span lang="ja">人口動態統計</span> · An update of MHLW's 2009 special report <span lang="ja">「不慮の事故死亡統計」</span></p>
-    <h1 class="jk-title">Accidental deaths in Japan, 1899–2025</h1>
-    <p class="jk-lede">In 2025, <b class="jk-n dash-skeleton" data-draw="v" data-source="by_type" data-field="total" data-where="year=2025" data-fmt="int">—</b> people in Japan died from unintentional injuries (<span lang="ja">不慮の事故</span>), <b class="jk-n dash-skeleton" data-draw="v" data-source="changes" data-field="vs2008_pct" data-where="metric=total" data-fmt="pct1">—</b> more than in 2008, the last year the 2009 report covered. Falls and drowning account for the rise, while road deaths have more than halved.</p>
-    <p class="jk-meta">Final data (<span lang="ja">確定数</span>) for 2025, published 30 September 2026. Japanese nationals in Japan.</p>
-  </header>
-
-  <section class="jk-kpis" id="kpis" aria-label="Key figures">
-    <div class="jk-kpi" id="kpi-total">
-      <p class="jk-kpi-label">Accidental deaths, 2025</p>
-      <p class="jk-kpi-value"><span class="dash-skeleton" data-draw="v" data-source="by_type" data-field="total" data-where="year=2025" data-fmt="int">—</span></p>
-      <p class="jk-kpi-sub"><span class="jk-delta dash-skeleton" data-draw="delta" data-good="down" data-source="changes" data-field="vs2008_pct" data-where="metric=total">—</span> vs 2008</p>
-      <p class="jk-kpi-sub"><span class="dash-skeleton" data-draw="v" data-source="long_run" data-field="accidental_rate" data-where="year=2024" data-fmt="rate">—</span> per 100,000 in 2024</p>
+<header class="bar">
+  <div class="bar-inner">
+    <a class="brand" href="#" aria-label="Home">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M8 23V15M13 23V10M18 23V13M23 23V7"/></svg>
+      <span class="brand-text"><span class="brand-name" data-t="appName">日本の不慮の事故死亡統計</span><span class="brand-sub" data-t="appSub">人口動態統計 1899〜2025年</span></span>
+    </a>
+    <nav class="nav" aria-label="Views">
+      <a href="#" data-nav="report" data-t="navReport">レポート</a>
+      <a href="#explorer" data-nav="explorer" data-t="navExplorer">データ探索</a>
+    </nav>
+    <div class="bar-tools">
+      <button type="button" id="install" class="btn ghost" hidden data-t="install">アプリをインストール</button>
+      <button type="button" id="lang" class="btn lang">English</button>
     </div>
-    <div class="jk-kpi" id="kpi-traffic">
-      <p class="jk-kpi-label">Traffic accidents <span lang="ja">交通事故</span></p>
-      <p class="jk-kpi-value"><span class="dash-skeleton" data-draw="v" data-source="by_type" data-field="traffic" data-where="year=2025" data-fmt="int">—</span></p>
-      <p class="jk-kpi-sub"><span class="jk-delta dash-skeleton" data-draw="delta" data-good="down" data-source="changes" data-field="vs2008_pct" data-where="metric=traffic">—</span> vs 2008</p>
-      <p class="jk-kpi-sub"><span class="dash-skeleton" data-draw="v" data-source="changes" data-field="pct_of_1995" data-where="metric=traffic" data-fmt="pct1">—</span> of the 1995 level</p>
-    </div>
-    <div class="jk-kpi" id="kpi-falls">
-      <p class="jk-kpi-label">Falls <span lang="ja">転倒・転落・墜落</span></p>
-      <p class="jk-kpi-value"><span class="dash-skeleton" data-draw="v" data-source="by_type" data-field="falls" data-where="year=2025" data-fmt="int">—</span></p>
-      <p class="jk-kpi-sub"><span class="jk-delta dash-skeleton" data-draw="delta" data-good="down" data-source="changes" data-field="vs2008_pct" data-where="metric=falls">—</span> vs 2008</p>
-      <p class="jk-kpi-sub">Largest type since 2017</p>
-    </div>
-    <div class="jk-kpi" id="kpi-drowning">
-      <p class="jk-kpi-label">Drowning <span lang="ja">溺死・溺水</span></p>
-      <p class="jk-kpi-value"><span class="dash-skeleton" data-draw="v" data-source="by_type" data-field="drowning" data-where="year=2025" data-fmt="int">—</span></p>
-      <p class="jk-kpi-sub"><span class="jk-delta dash-skeleton" data-draw="delta" data-good="down" data-source="changes" data-field="vs2008_pct" data-where="metric=drowning">—</span> vs 2008</p>
-      <p class="jk-kpi-sub"><span class="dash-skeleton" data-draw="v" data-source="detail_causes" data-field="deaths" data-where="code=W65-W66&amp;year=2025" data-fmt="int">—</span> in a bathtub</p>
-    </div>
-    <div class="jk-kpi" id="kpi-age">
-      <p class="jk-kpi-label">Aged 65 or over</p>
-      <p class="jk-kpi-value"><span class="dash-skeleton" data-draw="v" data-source="age_share" data-field="share_pct" data-where="group=65plus" data-fmt="pct1">—</span></p>
-      <p class="jk-kpi-sub">of all accidental deaths in 2025</p>
-      <p class="jk-kpi-sub"><span class="dash-skeleton" data-draw="v" data-source="age_share" data-field="share_pct" data-where="group=80plus" data-fmt="pct1">—</span> were 80 or over</p>
-    </div>
-  </section>
-
-  <nav class="jk-toc" aria-label="Sections">
-    <a href="#s1">1 Long-run trend</a>
-    <a href="#s2">2 By type</a>
-    <a href="#s3">3 Rates by age</a>
-    <a href="#s4">4 Road users</a>
-    <a href="#s5">5 Place</a>
-    <a href="#s6">6 At home</a>
-    <a href="#s7">7 Home share</a>
-    <a href="#s8">8 Age, 2025</a>
-    <a href="#s9">9 Detailed causes</a>
-  </nav>
-
-  <!-- 1 ─────────────────────────────────────────────── -->
-  <section class="jk-sec" id="s1">
-    <p class="jk-fig">Figure 1 <span class="jk-fig-ref">2009 report: <span lang="ja">図１</span></span></p>
-    <h2 class="jk-h2" id="s1-title">Deaths now exceed the 1970 peak, but the death rate does not</h2>
-    <div class="jk-text">
-      <p>Leaving aside the 1923 Great Kantō earthquake (<b class="jk-n dash-skeleton" data-draw="v" data-source="long_run" data-field="accidental_deaths" data-where="year=1923" data-fmt="int">—</b> deaths) and the 2011 Great East Japan earthquake and tsunami (<b class="jk-n dash-skeleton" data-draw="v" data-source="long_run" data-field="accidental_deaths" data-where="year=2011" data-fmt="int">—</b>), 2024 recorded the most accidental deaths of any year since 1899: <b class="jk-n dash-skeleton" data-draw="v" data-source="long_run" data-field="accidental_deaths" data-where="year=2024" data-fmt="int">—</b>. 2025 was slightly lower at <b class="jk-n dash-skeleton" data-draw="v" data-source="long_run" data-field="accidental_deaths" data-where="year=2025" data-fmt="int">—</b>.</p>
-      <p>Deaths peaked at <b class="jk-n dash-skeleton" data-draw="v" data-source="long_run" data-field="accidental_deaths" data-where="year=1970" data-fmt="int">—</b> in 1970, fell to between 28,000 and 30,000 a year from 1977 to 1988, and have climbed since as the population aged. Measured per 100,000 people, the rate was <b class="jk-n dash-skeleton" data-draw="v" data-source="long_run" data-field="accidental_rate" data-where="year=2024" data-fmt="rate">—</b> in 2024, still below <b class="jk-n dash-skeleton" data-draw="v" data-source="long_run" data-field="accidental_rate" data-where="year=1970" data-fmt="rate">—</b> in 1970.</p>
-    </div>
-    <div class="jk-card">
-      <div class="jk-card-top">
-        <p class="jk-card-title">Accidental deaths per year, 1899–2025</p>
-        <div class="jk-toggle" role="group" aria-label="Measure for figure 1" data-fig="fig1">
-          <button type="button" data-mode="deaths" aria-pressed="true">Deaths</button>
-          <button type="button" data-mode="rate" aria-pressed="false">Rate per 100,000</button>
-        </div>
-      </div>
-      <div class="jk-chart jk-chart--bars" id="fig1-chart" data-draw="fig1" data-source="long_run"></div>
-      <p class="jk-note">Red bars: 1923 Great Kantō earthquake, 1995 Great Hanshin-Awaji earthquake, 2011 Great East Japan earthquake and tsunami. No records survive for 1944–1946. 1947–1972 excludes Okinawa. MHLW has not yet published rates for 2025.</p>
-    </div>
-  </section>
-
-  <!-- 2 ─────────────────────────────────────────────── -->
-  <section class="jk-sec" id="s2">
-    <p class="jk-fig">Figure 2 <span class="jk-fig-ref">2009 report: <span lang="ja">図２</span></span></p>
-    <h2 class="jk-h2" id="s2-title">Falls overtook choking in 2017, and road deaths are under a quarter of their 1995 level</h2>
-    <div class="jk-text">
-      <p>Traffic accidents were the largest type until 2005 and fell in almost every year, from <b class="jk-n dash-skeleton" data-draw="v" data-source="by_type" data-field="traffic" data-where="year=1995" data-fmt="int">—</b> in 1995 to <b class="jk-n dash-skeleton" data-draw="v" data-source="by_type" data-field="traffic" data-where="year=2025" data-fmt="int">—</b> in 2025. Choking led from 2006 to 2016, peaking at <b class="jk-n dash-skeleton" data-draw="v" data-source="by_type" data-field="choking" data-where="year=2012" data-fmt="int">—</b> in 2012, and has since fallen to <b class="jk-n dash-skeleton" data-draw="v" data-source="by_type" data-field="choking" data-where="year=2025" data-fmt="int">—</b>.</p>
-      <p>Falls have led since 2017 and reached <b class="jk-n dash-skeleton" data-draw="v" data-source="by_type" data-field="falls" data-where="year=2025" data-fmt="int">—</b> in 2025, about <b class="jk-n dash-skeleton" data-draw="v" data-source="falls_traffic_ratio" data-fmt="x1">—</b> as many as traffic. Drowning rose to <b class="jk-n dash-skeleton" data-draw="v" data-source="by_type" data-field="drowning" data-where="year=2025" data-fmt="int">—</b>. The step up in falls in 2017 coincides with Japan's switch to ICD-10 (2013 version) coding that January, so part of it may reflect classification rather than more falls.</p>
-    </div>
-    <div class="jk-card">
-      <p class="jk-card-title">Deaths by main type of accident, 1995–2025</p>
-      <ul class="jk-legend" data-legend="fig2">
-        <li data-key="falls"><i data-swatch="falls"></i><span data-label>Falls</span> <span lang="ja">転倒・転落・墜落</span></li>
-        <li data-key="drowning"><i data-swatch="drowning"></i><span data-label>Drowning</span> <span lang="ja">溺死・溺水</span></li>
-        <li data-key="choking"><i data-swatch="choking"></i><span data-label>Choking</span> <span lang="ja">窒息</span></li>
-        <li data-key="traffic"><i data-swatch="traffic"></i><span data-label>Traffic</span> <span lang="ja">交通事故</span></li>
-        <li data-key="fire"><i data-swatch="fire"></i><span data-label>Smoke and fire</span> <span lang="ja">煙・火災</span></li>
-        <li data-key="poisoning"><i data-swatch="poisoning"></i><span data-label>Poisoning</span> <span lang="ja">中毒</span></li>
-      </ul>
-      <div class="jk-chart" id="fig2-chart" data-draw="fig2" data-source="by_type"></div>
-      <p class="jk-note">Dashed line at 2008: the last year in the 2009 report. Dotted line at 2017: ICD-10 (2013 version) coding begins.</p>
-    </div>
-  </section>
-
-  <!-- 3 ─────────────────────────────────────────────── -->
-  <section class="jk-sec" id="s3">
-    <p class="jk-fig">Figure 3 <span class="jk-fig-ref">2009 report: <span lang="ja">図３</span></span></p>
-    <h2 class="jk-h2" id="s3-title">Risk fell at most ages, except drowning among older people</h2>
-    <div class="jk-text">
-      <p>The 2009 report found that deaths from falls, drowning and choking were rising because there were more older people, not because the risk at any given age was rising. Comparing 2024, the latest year with official rates, against 2008 shows that this still holds for traffic, choking and fire, where rates fell in every age group.</p>
-      <p>Drowning is the exception. Its rate rose in every age group from 65–69 to 85–89, for example from <b class="jk-n dash-skeleton" data-draw="v" data-source="age_rates" data-field="drowning" data-where="year=2008&amp;age=80–84" data-fmt="rate">—</b> to <b class="jk-n dash-skeleton" data-draw="v" data-source="age_rates" data-field="drowning" data-where="year=2024&amp;age=80–84" data-fmt="rate">—</b> per 100,000 at ages 80–84. The fall rate at 85–89 also rose, from <b class="jk-n dash-skeleton" data-draw="v" data-source="age_rates" data-field="falls" data-where="year=2008&amp;age=85–89" data-fmt="rate">—</b> to <b class="jk-n dash-skeleton" data-draw="v" data-source="age_rates" data-field="falls" data-where="year=2024&amp;age=85–89" data-fmt="rate">—</b>.</p>
-    </div>
-    <div class="jk-card">
-      <div class="jk-card-top">
-        <p class="jk-card-title">Death rate per 100,000 by age group</p>
-        <ul class="jk-legend jk-legend--years" data-legend="fig3">
-          <li data-key="1995"><i class="jk-ln jk-ln--1995"></i><span data-label>1995</span></li>
-          <li data-key="2008"><i class="jk-ln jk-ln--2008"></i><span data-label>2008</span></li>
-          <li data-key="2024"><i class="jk-ln jk-ln--2024"></i><span data-label>2024</span></li>
-        </ul>
-      </div>
-      <div class="jk-panel jk-panel--wide" id="fig3-total">
-        <p class="jk-panel-title">All accidental deaths <span lang="ja">不慮の事故総数</span></p>
-        <div class="jk-chart jk-chart--panel" data-draw="fig3" data-type="total" data-source="age_rates"></div>
-      </div>
-      <div class="jk-panels">
-        <div class="jk-panel" id="fig3-traffic"><p class="jk-panel-title">Traffic <span lang="ja">交通事故</span></p><div class="jk-chart jk-chart--panel" data-draw="fig3" data-type="traffic" data-source="age_rates"></div></div>
-        <div class="jk-panel" id="fig3-falls"><p class="jk-panel-title">Falls <span lang="ja">転倒・転落・墜落</span></p><div class="jk-chart jk-chart--panel" data-draw="fig3" data-type="falls" data-source="age_rates"></div></div>
-        <div class="jk-panel" id="fig3-drowning"><p class="jk-panel-title">Drowning <span lang="ja">溺死・溺水</span></p><div class="jk-chart jk-chart--panel" data-draw="fig3" data-type="drowning" data-source="age_rates"></div></div>
-        <div class="jk-panel" id="fig3-choking"><p class="jk-panel-title">Choking <span lang="ja">窒息</span></p><div class="jk-chart jk-chart--panel" data-draw="fig3" data-type="choking" data-source="age_rates"></div></div>
-        <div class="jk-panel" id="fig3-fire"><p class="jk-panel-title">Smoke and fire <span lang="ja">煙・火災</span></p><div class="jk-chart jk-chart--panel" data-draw="fig3" data-type="fire" data-source="age_rates"></div></div>
-        <div class="jk-panel" id="fig3-poisoning"><p class="jk-panel-title">Poisoning <span lang="ja">中毒</span></p><div class="jk-chart jk-chart--panel" data-draw="fig3" data-type="poisoning" data-source="age_rates"></div></div>
-      </div>
-      <p class="jk-note">Each panel has its own scale. Ages 0–4 to 85–89, as in the 2009 report. 1995 and 2008 rates come from that report; 2024 rates from MHLW table 5-16. Rates for 2025 are not yet published.</p>
-    </div>
-  </section>
-
-  <!-- 4 ─────────────────────────────────────────────── -->
-  <section class="jk-sec" id="s4">
-    <p class="jk-fig">Figure 4 <span class="jk-fig-ref">2009 report: <span lang="ja">図４</span></span></p>
-    <h2 class="jk-h2" id="s4-title">Car occupant deaths fell the most, and pedestrians are now the largest group</h2>
-    <div class="jk-text">
-      <p>Between 1995 and 2025, deaths of car occupants fell from <b class="jk-n dash-skeleton" data-draw="v" data-source="traffic_mode" data-field="car" data-where="year=1995" data-fmt="int">—</b> to <b class="jk-n dash-skeleton" data-draw="v" data-source="traffic_mode" data-field="car" data-where="year=2025" data-fmt="int">—</b>, to <b class="jk-n dash-skeleton" data-draw="v" data-source="traffic_index" data-field="car" data-where="year=2025" data-fmt="pct1">—</b> of the 1995 level. Pedestrian deaths fell less steeply, from <b class="jk-n dash-skeleton" data-draw="v" data-source="traffic_mode" data-field="pedestrian" data-where="year=1995" data-fmt="int">—</b> to <b class="jk-n dash-skeleton" data-draw="v" data-source="traffic_mode" data-field="pedestrian" data-where="year=2025" data-fmt="int">—</b>, so pedestrians made up <b class="jk-n dash-skeleton" data-draw="v" data-source="traffic_index" data-field="pedestrian_share_pct" data-where="year=2025" data-fmt="pct1">—</b> of traffic deaths in 2025.</p>
-    </div>
-    <div class="jk-card">
-      <div class="jk-card-top">
-        <p class="jk-card-title">Traffic deaths by road user, 1995–2025</p>
-        <div class="jk-toggle" role="group" aria-label="Measure for figure 4" data-fig="fig4">
-          <button type="button" data-mode="count" aria-pressed="true">Deaths</button>
-          <button type="button" data-mode="index" aria-pressed="false">Index, 1995 = 100</button>
-        </div>
-      </div>
-      <ul class="jk-legend" data-legend="fig4">
-        <li data-key="pedestrian"><i data-swatch="pedestrian"></i><span data-label>Pedestrians</span> <span lang="ja">歩行者</span></li>
-        <li data-key="car"><i data-swatch="car"></i><span data-label>Car occupants</span> <span lang="ja">乗用車乗員</span></li>
-        <li data-key="motorcycle"><i data-swatch="motorcycle"></i><span data-label>Motorcyclists</span> <span lang="ja">オートバイ乗員</span></li>
-        <li data-key="cyclist"><i data-swatch="cyclist"></i><span data-label>Cyclists</span> <span lang="ja">自転車乗員</span></li>
-      </ul>
-      <div class="jk-chart" id="fig4-chart" data-draw="fig4" data-source="traffic_mode traffic_index"></div>
-      <p class="jk-note">Traffic deaths here cover all transport accidents (ICD-10 V01–V98), including those off public roads.</p>
-    </div>
-  </section>
-
-  <!-- 5 ─────────────────────────────────────────────── -->
-  <section class="jk-sec" id="s5">
-    <p class="jk-fig">Figure 5 <span class="jk-fig-ref">2009 report: <span lang="ja">図５</span></span></p>
-    <h2 class="jk-h2" id="s5-title">Home is still the most common recorded place, but more deaths now have no place recorded</h2>
-    <div class="jk-text">
-      <p>Of <b class="jk-n dash-skeleton" data-draw="v" data-source="place" data-field="total" data-where="year=2025" data-fmt="int">—</b> accidental deaths other than traffic in 2025, <b class="jk-n dash-skeleton" data-draw="v" data-source="place" data-field="home" data-where="year=2025" data-fmt="int">—</b> happened at home (<span lang="ja">家庭</span>) and <b class="jk-n dash-skeleton" data-draw="v" data-source="place" data-field="residential_institution" data-where="year=2025" data-fmt="int">—</b> in residential institutions such as care homes (<span lang="ja">居住施設</span>), up from <b class="jk-n dash-skeleton" data-draw="v" data-source="place" data-field="home" data-where="year=2008" data-fmt="int">—</b> and <b class="jk-n dash-skeleton" data-draw="v" data-source="place" data-field="residential_institution" data-where="year=2008" data-fmt="int">—</b> in 2008.</p>
-      <p>Deaths with no place recorded (<span lang="ja">詳細不明</span>) rose from <b class="jk-n dash-skeleton" data-draw="v" data-source="place" data-field="unknown_place" data-where="year=2008" data-fmt="int">—</b> to <b class="jk-n dash-skeleton" data-draw="v" data-source="place" data-field="unknown_place" data-where="year=2025" data-fmt="int">—</b> and have outnumbered deaths at home every year since 2019. Shares by place in figures 5 to 7 are therefore lower bounds.</p>
-    </div>
-    <div class="jk-card">
-      <p class="jk-card-title">Accidental deaths other than traffic, by place of injury, 1995–2025</p>
-      <ul class="jk-legend" data-legend="fig5">
-        <li data-key="unknown_place"><i data-swatch="unknown_place"></i><span data-label>Place not recorded</span> <span lang="ja">詳細不明</span></li>
-        <li data-key="home"><i data-swatch="home"></i><span data-label>Home</span> <span lang="ja">家庭</span></li>
-        <li data-key="other_place"><i data-swatch="other_place"></i><span data-label>Other specified place</span> <span lang="ja">その他</span></li>
-        <li data-key="residential_institution"><i data-swatch="residential_institution"></i><span data-label>Residential institution</span> <span lang="ja">居住施設</span></li>
-        <li data-key="public_area"><i data-swatch="public_area"></i><span data-label>School, institution or public area</span> <span lang="ja">公共の地域</span></li>
-        <li data-key="industrial"><i data-swatch="industrial"></i><span data-label>Industrial or construction site</span> <span lang="ja">工業用地域</span></li>
-      </ul>
-      <div class="jk-chart" id="fig5-chart" data-draw="fig5" data-source="place"></div>
-      <p class="jk-note">The 1995 and 2011 spikes in "place not recorded" and "other" are the Great Hanshin-Awaji and Great East Japan earthquakes. Streets, shops, farms and sports facilities are left out of the chart; they are in the data.</p>
-    </div>
-  </section>
-
-  <!-- 6 ─────────────────────────────────────────────── -->
-  <section class="jk-sec" id="s6">
-    <p class="jk-fig">Figure 6 <span class="jk-fig-ref">2009 report: <span lang="ja">図６</span></span></p>
-    <h2 class="jk-h2" id="s6-title">Drowning at home has nearly doubled since 2008</h2>
-    <div class="jk-text">
-      <p>Most of the growth in deaths at home is drowning, mainly in the bath. <b class="jk-n dash-skeleton" data-draw="v" data-source="home_type" data-field="drowning" data-where="year=2025" data-fmt="int">—</b> people drowned at home in 2025, against <b class="jk-n dash-skeleton" data-draw="v" data-source="home_type" data-field="drowning" data-where="year=2008" data-fmt="int">—</b> in 2008. Over the same period choking at home fell from <b class="jk-n dash-skeleton" data-draw="v" data-source="home_type" data-field="choking" data-where="year=2008" data-fmt="int">—</b> to <b class="jk-n dash-skeleton" data-draw="v" data-source="home_type" data-field="choking" data-where="year=2025" data-fmt="int">—</b>, house-fire deaths from <b class="jk-n dash-skeleton" data-draw="v" data-source="home_type" data-field="fire" data-where="year=2008" data-fmt="int">—</b> to <b class="jk-n dash-skeleton" data-draw="v" data-source="home_type" data-field="fire" data-where="year=2025" data-fmt="int">—</b>, and falls at home changed little (<b class="jk-n dash-skeleton" data-draw="v" data-source="home_type" data-field="falls" data-where="year=2025" data-fmt="int">—</b> in 2025).</p>
-    </div>
-    <div class="jk-card">
-      <p class="jk-card-title">Accidental deaths at home by main type, 1995–2025</p>
-      <ul class="jk-legend" data-legend="fig6">
-        <li data-key="drowning"><i data-swatch="drowning"></i><span data-label>Drowning</span> <span lang="ja">溺死・溺水</span></li>
-        <li data-key="choking"><i data-swatch="choking"></i><span data-label>Choking</span> <span lang="ja">窒息</span></li>
-        <li data-key="falls"><i data-swatch="falls"></i><span data-label>Falls</span> <span lang="ja">転倒・転落・墜落</span></li>
-        <li data-key="fire"><i data-swatch="fire"></i><span data-label>Smoke and fire</span> <span lang="ja">煙・火災</span></li>
-        <li data-key="poisoning"><i data-swatch="poisoning"></i><span data-label>Poisoning</span> <span lang="ja">中毒</span></li>
-      </ul>
-      <div class="jk-chart" id="fig6-chart" data-draw="fig6" data-source="home_type"></div>
-    </div>
-  </section>
-
-  <!-- 7 ─────────────────────────────────────────────── -->
-  <section class="jk-sec" id="s7">
-    <p class="jk-fig">Figure 7 <span class="jk-fig-ref">2009 report: <span lang="ja">図７</span></span></p>
-    <h2 class="jk-h2" id="s7-title">Four in five drownings now happen at home, the same share as fire deaths</h2>
-    <div class="jk-text">
-      <p>In 2025, <b class="jk-n dash-skeleton" data-draw="v" data-source="home_share" data-field="drowning" data-where="year=2025" data-fmt="pct1">—</b> of drowning deaths and <b class="jk-n dash-skeleton" data-draw="v" data-source="home_share" data-field="fire" data-where="year=2025" data-fmt="pct1">—</b> of fire deaths happened at home, against <b class="jk-n dash-skeleton" data-draw="v" data-source="home_share" data-field="drowning" data-where="year=2008" data-fmt="pct1">—</b> and <b class="jk-n dash-skeleton" data-draw="v" data-source="home_share" data-field="fire" data-where="year=2008" data-fmt="pct1">—</b> in 2008. The home share of falls dropped from <b class="jk-n dash-skeleton" data-draw="v" data-source="home_share" data-field="falls" data-where="year=2008" data-fmt="pct1">—</b> to <b class="jk-n dash-skeleton" data-draw="v" data-source="home_share" data-field="falls" data-where="year=2025" data-fmt="pct1">—</b>, partly because more fall deaths have no place recorded.</p>
-    </div>
-    <div class="jk-card">
-      <p class="jk-card-title">Share of deaths that happened at home, by type, 1995–2025</p>
-      <ul class="jk-legend" data-legend="fig7">
-        <li data-key="drowning"><i data-swatch="drowning"></i><span data-label>Drowning</span> <span lang="ja">溺死・溺水</span></li>
-        <li data-key="fire"><i data-swatch="fire"></i><span data-label>Smoke and fire</span> <span lang="ja">煙・火災</span></li>
-        <li data-key="poisoning"><i data-swatch="poisoning"></i><span data-label>Poisoning</span> <span lang="ja">中毒</span></li>
-        <li data-key="choking"><i data-swatch="choking"></i><span data-label>Choking</span> <span lang="ja">窒息</span></li>
-        <li data-key="falls"><i data-swatch="falls"></i><span data-label>Falls</span> <span lang="ja">転倒・転落・墜落</span></li>
-        <li data-key="overall"><i data-swatch="overall"></i><span data-label>All accidents other than traffic</span></li>
-      </ul>
-      <div class="jk-chart" id="fig7-chart" data-draw="fig7" data-source="home_share"></div>
-      <p class="jk-note">Deaths at home divided by all deaths of that type, wherever they happened.</p>
-    </div>
-  </section>
-
-  <!-- 8 ─────────────────────────────────────────────── -->
-  <section class="jk-sec" id="s8">
-    <p class="jk-fig">Figure 8 <span class="jk-fig-ref">New in this edition</span></p>
-    <h2 class="jk-h2" id="s8-title">Nearly nine in ten accidental deaths are people aged 65 or over</h2>
-    <div class="jk-text">
-      <p><b class="jk-n dash-skeleton" data-draw="v" data-source="age_share" data-field="share_pct" data-where="group=65plus" data-fmt="pct1">—</b> of the people who died in accidents in 2025 were 65 or over, and <b class="jk-n dash-skeleton" data-draw="v" data-source="age_share" data-field="share_pct" data-where="group=80plus" data-fmt="pct1">—</b> were 80 or over. The mix of causes changes sharply with age: choking caused <b class="jk-n dash-skeleton" data-draw="v" data-source="age_groups_2025" data-field="choking" data-where="age_group=0" data-fmt="int">—</b> of the <b class="jk-n dash-skeleton" data-draw="v" data-source="age_groups_2025" data-field="total" data-where="age_group=0" data-fmt="int">—</b> deaths of babies under one, and traffic <b class="jk-n dash-skeleton" data-draw="v" data-source="age_groups_2025" data-field="traffic" data-where="age_group=15–29" data-fmt="int">—</b> of the <b class="jk-n dash-skeleton" data-draw="v" data-source="age_groups_2025" data-field="total" data-where="age_group=15–29" data-fmt="int">—</b> deaths at ages 15–29.</p>
-    </div>
-    <div class="jk-card">
-      <div class="jk-card-top">
-        <p class="jk-card-title">Accidental deaths in 2025 by age group and type</p>
-        <div class="jk-toggle" role="group" aria-label="Measure for figure 8" data-fig="fig8">
-          <button type="button" data-mode="count" aria-pressed="true">Deaths</button>
-          <button type="button" data-mode="share" aria-pressed="false">Share within age group</button>
-        </div>
-      </div>
-      <ul class="jk-legend" data-legend="fig8">
-        <li data-key="falls"><i data-swatch="falls"></i><span data-label>Falls</span></li>
-        <li data-key="drowning"><i data-swatch="drowning"></i><span data-label>Drowning</span></li>
-        <li data-key="choking"><i data-swatch="choking"></i><span data-label>Choking</span></li>
-        <li data-key="traffic"><i data-swatch="traffic"></i><span data-label>Traffic</span></li>
-        <li data-key="fire"><i data-swatch="fire"></i><span data-label>Smoke and fire</span></li>
-        <li data-key="poisoning"><i data-swatch="poisoning"></i><span data-label>Poisoning</span></li>
-        <li data-key="other"><i data-swatch="other"></i><span data-label>Other</span></li>
-      </ul>
-      <div class="jk-rows" id="fig8-chart" data-source="age_groups_2025 age_mix">
-        <div class="jk-row"><span class="jk-row-label">Under 1</span><div class="jk-row-bar" data-draw="fig8row" data-age="0"></div></div>
-        <div class="jk-row"><span class="jk-row-label">1–4</span><div class="jk-row-bar" data-draw="fig8row" data-age="1–4"></div></div>
-        <div class="jk-row"><span class="jk-row-label">5–9</span><div class="jk-row-bar" data-draw="fig8row" data-age="5–9"></div></div>
-        <div class="jk-row"><span class="jk-row-label">10–14</span><div class="jk-row-bar" data-draw="fig8row" data-age="10–14"></div></div>
-        <div class="jk-row"><span class="jk-row-label">15–29</span><div class="jk-row-bar" data-draw="fig8row" data-age="15–29"></div></div>
-        <div class="jk-row"><span class="jk-row-label">30–44</span><div class="jk-row-bar" data-draw="fig8row" data-age="30–44"></div></div>
-        <div class="jk-row"><span class="jk-row-label">45–64</span><div class="jk-row-bar" data-draw="fig8row" data-age="45–64"></div></div>
-        <div class="jk-row"><span class="jk-row-label">65–79</span><div class="jk-row-bar" data-draw="fig8row" data-age="65–79"></div></div>
-        <div class="jk-row"><span class="jk-row-label">80 and over</span><div class="jk-row-bar" data-draw="fig8row" data-age="80 and over"></div></div>
-        <div class="jk-row jk-row--axis"><span class="jk-row-label"></span><div class="jk-row-bar" data-draw="fig8axis"></div></div>
-      </div>
-      <p class="jk-note">Age groups as published in MHLW table 5-31. Deaths of unknown age are left out.</p>
-    </div>
-  </section>
-
-  <!-- 9 ─────────────────────────────────────────────── -->
-  <section class="jk-sec" id="s9">
-    <p class="jk-fig">Figure 9 <span class="jk-fig-ref">New in this edition</span></p>
-    <h2 class="jk-h2" id="s9-title">Slips on level ground and bathtub drowning drive the rise</h2>
-    <div class="jk-text">
-      <p>Slips, trips and stumbles on the same level (ICD-10 W01) killed <b class="jk-n dash-skeleton" data-draw="v" data-source="detail_causes" data-field="deaths" data-where="code=W01&amp;year=2025" data-fmt="int">—</b> people in 2025, against <b class="jk-n dash-skeleton" data-draw="v" data-source="detail_causes" data-field="deaths" data-where="code=W01&amp;year=1995" data-fmt="int">—</b> in 1995. Drowning in a bathtub (W65–W66) rose from <b class="jk-n dash-skeleton" data-draw="v" data-source="detail_causes" data-field="deaths" data-where="code=W65-W66&amp;year=1995" data-fmt="int">—</b> to <b class="jk-n dash-skeleton" data-draw="v" data-source="detail_causes" data-field="deaths" data-where="code=W65-W66&amp;year=2025" data-fmt="int">—</b>. Exposure to natural heat (X30) killed <b class="jk-n dash-skeleton" data-draw="v" data-source="detail_causes" data-field="deaths" data-where="code=X30&amp;year=2025" data-fmt="int">—</b> in 2025 after <b class="jk-n dash-skeleton" data-draw="v" data-source="detail_causes" data-field="deaths" data-where="code=X30&amp;year=2024" data-fmt="int">—</b> in 2024, against a few hundred a year in the 1990s.</p>
-    </div>
-    <div class="jk-card">
-      <div class="jk-card-top">
-        <p class="jk-card-title">Deaths from selected detailed causes, 1995 and 2025</p>
-        <ul class="jk-legend jk-legend--years" data-legend="fig9">
-          <li data-key="1995"><i class="jk-dot jk-dot--from"></i><span data-label>1995</span></li>
-          <li data-key="2025-up"><i class="jk-dot jk-dot--up"></i><span data-label>2025, higher</span></li>
-          <li data-key="2025-down"><i class="jk-dot jk-dot--down"></i><span data-label>2025, lower</span></li>
-        </ul>
-      </div>
-      <div class="jk-rows jk-rows--dumbbell" id="fig9-chart" data-source="detail_causes">
-        <div class="jk-row"><span class="jk-row-label">Slips, trips and stumbles on level ground <span class="jk-code">W01</span></span><div class="jk-row-bar" data-draw="fig9row" data-code="W01"></div></div>
-        <div class="jk-row"><span class="jk-row-label">Drowning in a bathtub <span class="jk-code">W65–W66</span></span><div class="jk-row-bar" data-draw="fig9row" data-code="W65-W66"></div></div>
-        <div class="jk-row"><span class="jk-row-label">Choking on food <span class="jk-code">W79</span></span><div class="jk-row-bar" data-draw="fig9row" data-code="W79"></div></div>
-        <div class="jk-row"><span class="jk-row-label">All transport accidents <span class="jk-code">V01–V98</span></span><div class="jk-row-bar" data-draw="fig9row" data-code="V01-V98"></div></div>
-        <div class="jk-row"><span class="jk-row-label">Natural heat <span class="jk-code">X30</span></span><div class="jk-row-bar" data-draw="fig9row" data-code="X30"></div></div>
-        <div class="jk-row"><span class="jk-row-label">Natural cold <span class="jk-code">X31</span></span><div class="jk-row-bar" data-draw="fig9row" data-code="X31"></div></div>
-        <div class="jk-row"><span class="jk-row-label">Fire in a building <span class="jk-code">X00</span></span><div class="jk-row-bar" data-draw="fig9row" data-code="X00"></div></div>
-        <div class="jk-row"><span class="jk-row-label">Falls on stairs or steps <span class="jk-code">W10</span></span><div class="jk-row-bar" data-draw="fig9row" data-code="W10"></div></div>
-        <div class="jk-row"><span class="jk-row-label">Drowning in natural water <span class="jk-code">W69–W70</span></span><div class="jk-row-bar" data-draw="fig9row" data-code="W69-W70"></div></div>
-        <div class="jk-row"><span class="jk-row-label">Falls from a building <span class="jk-code">W13</span></span><div class="jk-row-bar" data-draw="fig9row" data-code="W13"></div></div>
-        <div class="jk-row jk-row--axis"><span class="jk-row-label"></span><div class="jk-row-bar" data-draw="fig9axis"></div></div>
-      </div>
-      <p class="jk-note">From MHLW table 5-30. Choking on other objects (W80) and unspecified suffocation (W84) are left out because their 2017 coding change makes 1995 and 2025 not comparable.</p>
-    </div>
-  </section>
-
-  <footer class="jk-foot" id="about">
-    <details class="jk-details">
-      <summary>About the data: sources, method and caveats</summary>
-      <div class="jk-details-body">
-        <h3>Sources</h3>
-        <ul>
-          <li>Ministry of Health, Labour and Welfare (MHLW), Vital Statistics of Japan, final data, deaths (<span lang="ja">人口動態調査 人口動態統計 確定数 死亡</span>), editions 2009 to 2025, tables 5-12, 5-16, 5-30, 5-31, 5-33, 5-34 and 5-35, via <a href="https://www.e-stat.go.jp/stat-search/files?toukei=00450011&amp;tstat=000001028897">e-Stat</a>.</li>
-          <li>MHLW, <a href="https://www.mhlw.go.jp/toukei/saikin/hw/jinkou/tokusyu/furyo10/01.html">Overview of accidental death statistics, FY2009 special report</a> (<span lang="ja">平成21年度「不慮の事故死亡統計」の概況</span>), statistical tables 2 to 6, for 1995–2008 and for the 1995, 2008 age-specific rates.</li>
-        </ul>
-        <h3>Method</h3>
-        <ul>
-          <li>1995–2008 values are taken from the 2009 report. 2009–2025 values come from e-Stat, using the newest edition that prints each year. Place and home tables are published one year at a time, so each year comes from its own edition.</li>
-          <li>Types follow the 2009 report: traffic V01–V98, falls W00–W17, drowning W65–W74, choking W75–W84, smoke and fire X00–X09, poisoning X40–X49. "Other" is the total minus these.</li>
-          <li>Road-user groups in figure 4 regroup ICD-10 transport codes the same way as the 2009 report.</li>
-          <li>Shares, changes and the 1995 index are worked out on the page from the published counts.</li>
-        </ul>
-        <h3>Caveats</h3>
-        <ul>
-          <li>In March 2019 MHLW recounted 2004, 2006 and 2009–2017 after some prefectures under-reported. Values for 2012–2017 here are recounted; 2004 and 2006 (from the 2009 report) and 2009 and 2011 are as first published. Where both versions exist, totals match.</li>
-          <li>From 2017 Japan codes causes of death with ICD-10 (2013 version). Falls and the split between choking subcodes changed at that point.</li>
-          <li>MHLW has not yet published 2025 death rates, so rates stop at 2024.</li>
-          <li>The share of non-traffic accidental deaths with no place recorded rose from about 30% in 2008 to over 40% in 2025, so counts by place understate every specific place.</li>
-          <li>Figures cover Japanese nationals who died in Japan, as in the vital statistics.</li>
-        </ul>
-      </div>
-    </details>
-  </footer>
-</article>
-
-<script src="app.js"></script>
-
-</div>
+  </div>
+</header>
+<main id="main" class="main"><p class="msg" data-t="loading">データを読み込んでいます…</p></main>
+<footer class="foot">
+  <p data-t="footer">データ：厚生労働省。e-Statの公開統計表から作成。</p>
+  <p><a href="https://github.com/semui01/japanjiko" rel="noopener" data-t="repo">ソースコードとデータ</a></p>
+</footer>
+<div id="toast" class="toast" role="status" hidden></div>
+<noscript><p class="msg">このアプリにはJavaScriptが必要です。This app needs JavaScript.</p></noscript>
 </body>
 </html>

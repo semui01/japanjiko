@@ -1,0 +1,16 @@
+{
+  "name": "日本の不慮の事故死亡統計 — Accidental Deaths in Japan",
+  "short_name": "不慮の事故統計",
+  "description": "厚生労働省の人口動態統計による不慮の事故死亡の推移（1899〜2025年）。Accidental deaths in Japan from MHLW vital statistics, 1899–2025.",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f6f8",
+  "theme_color": "#3b6fd4",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

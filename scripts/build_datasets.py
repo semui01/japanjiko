@@ -35,8 +35,8 @@ def num(cell):
     s = str(cell).strip().replace(",", "")
     if s in ("-", "－", ""):
         return 0
-    if s in ("…", "..."):
-        return None
+    if s in ("…", "...", ".", "・", "x", "X", "*"):
+        return None  # not available / not applicable
     v = float(s)
     return int(v) if v.is_integer() else v
 
@@ -280,6 +280,105 @@ def detail_causes():
     write("detail_causes", ["code", "cause_ja", "level", "year", "deaths", "rate"], out)
 
 
+# ------------- 9. explorer: deaths and rates by cause, sex and age, 1995-2025
+EXPLORER_CAUSES = {"20100": "total", "20101": "traffic", "20102": "falls", "20103": "drowning",
+                   "20104": "choking", "20105": "fire", "20106": "poisoning", "20107": "other"}
+EXPLORER_AGES = AGES + ["90+"]
+OLDEST = ["90–94", "95–99", "100+"]
+
+
+def age_key(label):
+    """Normalise the many age-column spellings used since 1995 ('0～4', '000-004歳', '90歳～', ...)."""
+    s = str(label).strip()
+    if not s or "再" in s:
+        return None
+    if s == "総数":
+        return "all"
+    if s == "不詳":
+        return "unknown"
+    s = s.replace("歳", "").replace("～", "-").replace("〜", "-").replace("以上", "-")
+    m = re.fullmatch(r"0*(\d+)-0*(\d+)", s)
+    if m:
+        a, b = int(m.group(1)), int(m.group(2))
+        return f"{a}–{b}" if b - a == 4 else None
+    m = re.fullmatch(r"0*(\d+)-", s)
+    if m:
+        return f"{int(m.group(1))}+"
+    m = re.fullmatch(r"0*(\d+)", s)
+    return "100+" if m and int(m.group(1)) == 100 else None
+
+
+def sex_key(cell):
+    s = str(cell)
+    return "male" if "男" in s else "female" if "女" in s else "all" if "総数" in s else None
+
+
+def by_cause_sex_age(name):
+    """{(cause, sex): {age: value}} plus the all-cause rows, from a table-2 or table-5-16 CSV."""
+    rows = estat(name)
+    h = next(i for i, r in enumerate(rows) if "総数" in r and any(age_key(c) == "5–9" for c in r))
+    head = rows[h]
+    start = head.index("総数")
+    cols = {i: age_key(c) for i, c in enumerate(head) if i >= start and age_key(c)}
+    out, cause, first = {}, None, True
+    for r in rows[h + 1:]:
+        if len(r) <= start:
+            continue
+        sex = sex_key(r[start - 1])
+        if sex is None:
+            continue
+        lead = r[0].strip()
+        if lead:
+            m = re.match(r"(\d{4,5})", lead)
+            cause = "allcause" if first else (m.group(1).zfill(5) if m else None)
+            first = False
+        if cause is None or (cause, sex) in out:
+            continue
+        out[(cause, sex)] = {a: num(r[i]) for i, a in cols.items() if i < len(r)}
+    return out
+
+
+def explorer():
+    out, derived_n = [], 0
+    for y in range(1995, 2026):
+        deaths = by_cause_sex_age(f"{y}_h2")
+        rates = by_cause_sex_age(f"{y}_5-16") if (RAW / "estat" / f"{y}_5-16.csv").exists() else {}
+        rate_all = rates.get(("allcause", "all")) or next(iter(rates.values()), None)
+        for code, cause in EXPLORER_CAUSES.items():
+            for sex in ("all", "male", "female"):
+                d = deaths[(code, sex)]
+                r = rates.get((code, sex), {})
+                for age in ["all"] + EXPLORER_AGES:
+                    derived = 0
+                    if age == "90+":
+                        dv = sum(d.get(a) or 0 for a in OLDEST) if "90+" not in d else d["90+"]
+                    else:
+                        dv = d.get(age)
+                    rv = r.get(age) if r else None
+                    if r and age == "90+" and rv is None:
+                        # Rate not published for 90+: population = all-cause deaths / all-cause rate.
+                        pop = 0.0
+                        for a in OLDEST:
+                            ad, ar = deaths[("allcause", sex)].get(a), rates[("allcause", sex)].get(a)
+                            if ad and ar:
+                                pop += ad / ar * 100000
+                        rv = round(dv / pop * 100000, 1) if pop else None
+                        derived, derived_n = 1, derived_n + 1
+                    out.append([y, cause, sex, age, dv, rv, derived])
+        del rate_all
+    # check against the spliced headline series
+    totals = {(r[0], r[1]): r[4] for r in out if r[2] == "all" and r[3] == "all"}
+    with (OUT / "by_type.csv").open(encoding="utf-8") as f:
+        diffs = []
+        for row in csv.DictReader(f):
+            for k in ("total", "traffic", "falls", "drowning", "choking", "fire", "poisoning", "other"):
+                a, b = totals[(int(row["year"]), k)], int(row[k])
+                if a != b:
+                    diffs.append((row["year"], k, a, b))
+    print(f"explorer: {derived_n} derived 90+ rates; {len(diffs)} cells differ from by_type.csv", diffs[:12])
+    write("explorer", ["year", "cause", "sex", "age", "deaths", "rate", "rate_derived"], out)
+
+
 if __name__ == "__main__":
     long_run()
     by_type()
@@ -289,3 +388,4 @@ if __name__ == "__main__":
     home_type()
     age_groups_2025()
     detail_causes()
+    explorer()

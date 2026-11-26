@@ -8,6 +8,14 @@ The original page ends in 2008 and has seven static charts. This edition extends
 redraws the charts with tooltips and toggles, and adds two figures (deaths by age group in 2025,
 and detailed ICD-10 causes for 1995 and 2025).
 
+**Web app: https://semui01.github.io/japanjiko/** (日本語 / English)
+
+* **Report**: the nine figures with narrative, in Japanese or English (one-click switch, remembered per browser).
+* **Data explorer**: any cause, sex (or male vs female), age group, measure (deaths or rate per 100,000)
+  and period from 1995 to 2025, over time or by age, with a table.
+* **Share and download**: a link to each figure or explorer view, each chart as PNG, its data as CSV.
+* **Install and offline**: installable as an app (PWA); works without a connection after the first visit.
+
 ## Key findings (2025)
 
 | | 2008 | 2025 | Change |
@@ -41,24 +49,24 @@ and detailed ICD-10 causes for 1995 and 2025).
 ## Repository layout
 
 ```
+app/                 the web app source: index.html, styles.css, js/ (ES modules), sw.js, manifest, icons, vendor/d3
+docs/                built site served by GitHub Pages (main branch, /docs) — generated, do not edit
 data/raw/            source tables exactly as downloaded (e-Stat CSVs are Shift_JIS)
-data/*.csv           tidy datasets used by the report (UTF-8)
+data/*.csv           tidy datasets used by the app (UTF-8)
 scripts/             fetch_sources.py → build_datasets.py → build_site.py
-report/              the page: index.html (text and structure), app.js (charts), app.css
-site/                tokens.css and dash-shim.js, which let report/ run as a static site
-docs/                built static site (GitHub Pages: main branch, /docs folder)
+report/              the same report as a Claude dashboard page (text in index.html, charts in app.js)
 ```
 
 ## Rebuild
 
 ```bash
 pip install xlrd
-python3 scripts/fetch_sources.py   # downloads 45 e-Stat tables and the 2009 report workbook
-python3 scripts/build_datasets.py  # writes data/*.csv
-python3 scripts/build_site.py      # writes docs/
+python3 scripts/fetch_sources.py   # downloads 105 e-Stat tables and the 2009 report workbook
+python3 scripts/build_datasets.py  # writes data/*.csv and checks the explorer totals against the report series
+python3 scripts/build_site.py      # copies app/ and data into docs/ and stamps the offline cache version
 ```
 
-Preview locally with `python3 -m http.server -d docs` and open http://localhost:8000.
+Preview locally with `python3 -m http.server -d docs` and open http://localhost:8000. Commit `docs/` to deploy.
 
 ## Datasets
 
@@ -72,6 +80,7 @@ Preview locally with `python3 -m http.server -d docs` and open http://localhost:
 | `home_type.csv` | 1995–2025 | deaths at home by type |
 | `age_groups_2025.csv` | 2025 | deaths by MHLW age group and type (table 5-31) |
 | `detail_causes.csv` | 1995, 2000, 2005, 2010, 2014–2025 | deaths and rate by three-character ICD-10 cause (table 5-30) |
+| `explorer.csv` | 1995–2025 | deaths and rate by cause (8), sex (3) and age group (20): volume 2 table 2 and table 5-16 of every edition |
 
 Each row carries a `source` column naming the table and edition it came from, where the series is spliced.
 
@@ -81,6 +90,7 @@ Each row carries a `source` column naming the table and edition it came from, wh
 * **Categories** follow the 2009 report: traffic V01–V98, falls W00–W17, drowning W65–W74, choking W75–W84, smoke and fire X00–X09, poisoning X40–X49; "other" is the remainder.
 * **2019 recount.** MHLW recounted 2004, 2006 and 2009–2017 after prefectural under-reporting. 2012–2017 values here are recounted; 2004, 2006, 2009 and 2011 are as first published. Where both versions exist, totals match.
 * **ICD-10 (2013 version)** applies from 2017; the step up in falls that year and the W80/W84 split partly reflect coding.
+* **Explorer 90+ rates.** Tables 5-16 for 2005–2024 publish ages 90–94, 95–99 and 100+ separately, not 90+. The explorer's 90+ rate for those years is worked out from published numbers (population = all-cause deaths ÷ all-cause rate) and flagged in `rate_derived`.
 * **2025 rates** are not yet published by MHLW (shown as "…" in the tables), so rate series end in 2024.
 * **Place not recorded** rose from 30% of non-traffic deaths in 2008 to 42% in 2025, so every specific place is undercounted.
 * Coverage is Japanese nationals who died in Japan.
