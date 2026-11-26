@@ -1,0 +1,93 @@
+# Accidental deaths in Japan, 1899–2025
+
+An updated, interactive edition of the Ministry of Health, Labour and Welfare's 2009 special report
+[「不慮の事故死亡統計」の概況 — 1 不慮の事故による死亡の年次推移](https://www.mhlw.go.jp/toukei/saikin/hw/jinkou/tokusyu/furyo10/01.html),
+rebuilt with final vital statistics (人口動態統計 確定数) up to **2025**, published 30 September 2026.
+
+The original page ends in 2008 and has seven static charts. This edition extends every series to 2025,
+redraws the charts with tooltips and toggles, and adds two figures (deaths by age group in 2025,
+and detailed ICD-10 causes for 1995 and 2025).
+
+## Key findings (2025)
+
+| | 2008 | 2025 | Change |
+|---|---:|---:|---:|
+| Accidental deaths | 38,153 | 45,068 | +18.1% |
+| Traffic (交通事故) | 7,499 | 3,348 | −55.4% |
+| Falls (転倒・転落・墜落) | 7,170 | 11,963 | +66.8% |
+| Drowning (溺死・溺水) | 6,464 | 10,065 | +55.7% |
+| Choking (窒息) | 9,419 | 8,059 | −14.4% |
+
+* 2024 recorded 45,743 accidental deaths, the most of any year since 1899 apart from the 1923 and 2011 earthquakes.
+* Falls have been the largest type since 2017. Road deaths are 22% of their 1995 level.
+* Age-specific rates fell for traffic, choking and fire at every age, but **drowning rates rose at every age from 65 to 89** (2024 vs 2008). This partly overturns the 2009 report's conclusion that rising deaths reflected population ageing alone.
+* 88.6% of 2025's accidental deaths were people aged 65 or over.
+* Deaths with no place recorded have outnumbered deaths at home every year since 2019.
+
+## Figures
+
+| # | Figure | 2009 report |
+|---|---|---|
+| 1 | Accidental deaths per year, 1899–2025 (deaths or rate) | 図1 |
+| 2 | Deaths by main type, 1995–2025 | 図2 |
+| 3 | Death rate by age group: 1995, 2008, 2024 | 図3 |
+| 4 | Traffic deaths by road user (deaths or index) | 図4 |
+| 5 | Non-traffic deaths by place of injury | 図5 |
+| 6 | Deaths at home by type | 図6 |
+| 7 | Share of deaths that happened at home | 図7 |
+| 8 | 2025 deaths by age group and type | new |
+| 9 | Detailed causes, 1995 against 2025 | new |
+
+## Repository layout
+
+```
+data/raw/            source tables exactly as downloaded (e-Stat CSVs are Shift_JIS)
+data/*.csv           tidy datasets used by the report (UTF-8)
+scripts/             fetch_sources.py → build_datasets.py → build_site.py
+report/              the page: index.html (text and structure), app.js (charts), app.css
+site/                tokens.css and dash-shim.js, which let report/ run as a static site
+docs/                built static site (GitHub Pages: main branch, /docs folder)
+```
+
+## Rebuild
+
+```bash
+pip install xlrd
+python3 scripts/fetch_sources.py   # downloads 45 e-Stat tables and the 2009 report workbook
+python3 scripts/build_datasets.py  # writes data/*.csv
+python3 scripts/build_site.py      # writes docs/
+```
+
+Preview locally with `python3 -m http.server -d docs` and open http://localhost:8000.
+
+## Datasets
+
+| File | Rows | Contents |
+|---|---|---|
+| `long_run.csv` | 1899–2025 | all deaths, accidental deaths and rate, traffic deaths and rate (table 5-12) |
+| `by_type.csv` | 1995–2025 | total, traffic, falls, drowning, choking, fire, poisoning, other |
+| `age_rates.csv` | 1995, 2000, 2005, 2008, 2024 × 18 age groups | rate per 100,000 by type |
+| `traffic_mode.csv` | 1995–2025 | pedestrian, cyclist, motorcycle, car, light truck/van, heavy vehicle, other land, water, other |
+| `place.csv` | 1995–2025 | non-traffic deaths by place of injury (ICD-10 fourth character) |
+| `home_type.csv` | 1995–2025 | deaths at home by type |
+| `age_groups_2025.csv` | 2025 | deaths by MHLW age group and type (table 5-31) |
+| `detail_causes.csv` | 1995, 2000, 2005, 2010, 2014–2025 | deaths and rate by three-character ICD-10 cause (table 5-30) |
+
+Each row carries a `source` column naming the table and edition it came from, where the series is spliced.
+
+## Method and caveats
+
+* **Splicing.** 1995–2008 values come from the 2009 report's statistical tables. 2009–2025 values come from e-Stat, using the newest edition that prints each year; place and home tables are one year per edition.
+* **Categories** follow the 2009 report: traffic V01–V98, falls W00–W17, drowning W65–W74, choking W75–W84, smoke and fire X00–X09, poisoning X40–X49; "other" is the remainder.
+* **2019 recount.** MHLW recounted 2004, 2006 and 2009–2017 after prefectural under-reporting. 2012–2017 values here are recounted; 2004, 2006, 2009 and 2011 are as first published. Where both versions exist, totals match.
+* **ICD-10 (2013 version)** applies from 2017; the step up in falls that year and the W80/W84 split partly reflect coding.
+* **2025 rates** are not yet published by MHLW (shown as "…" in the tables), so rate series end in 2024.
+* **Place not recorded** rose from 30% of non-traffic deaths in 2008 to 42% in 2025, so every specific place is undercounted.
+* Coverage is Japanese nationals who died in Japan.
+
+## Sources
+
+* MHLW, Vital Statistics of Japan, final data, deaths — [e-Stat 人口動態調査](https://www.e-stat.go.jp/stat-search/files?toukei=00450011&tstat=000001028897). Statistics IDs for every file are listed in `scripts/fetch_sources.py`.
+* MHLW, [平成21年度「不慮の事故死亡統計」の概況](https://www.mhlw.go.jp/toukei/saikin/hw/jinkou/tokusyu/furyo10/index.html) (2010).
+
+Source data © MHLW, via e-Stat. See the [e-Stat terms of use](https://www.e-stat.go.jp/terms-of-use) before reusing the raw tables; credit the source when you do.

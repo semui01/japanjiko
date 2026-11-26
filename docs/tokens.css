@@ -1,0 +1,75 @@
+/* Standalone design tokens: the names report/app.css expects from the dashboard runtime.
+   Cool neutral ground, one categorical palette tuned for both themes. */
+:root {
+  color-scheme: light;
+  --color-bg: #f5f6f8;
+  --color-panel: #ffffff;
+  --color-fg: #15181e;
+  --color-fg-muted: #5a6170;
+  --color-border-line: #e1e4ea;
+  --color-ok: #2f855a;
+  --color-warn: #b7791f;
+  --color-bad: #c53030;
+  --c1: #3b6fd4; --c2: #d97b29; --c3: #13939f; --c4: #8a5ac2; --c5: #c8463d; --c6: #6b8e23; --c7: #8c96a3;
+  --cds-chart-muted: #a7aebb;
+  --cds-chart-grid: #eceef2;
+  --cds-chart-axis: #c9ced8;
+  --cds-chart-reference: #8a92a0;
+  --cds-chart-status-critical: #c8463d;
+  --cds-text-secondary: #5a6170;
+  --cds-surface-popover: #ffffff;
+  --cds-border: #dfe3ea;
+  --cds-shadow-popover: 0 6px 24px rgba(20, 26, 38, 0.12);
+  --font-anthropic-sans: "Inter", "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-anthropic-serif: "Source Serif 4", "Noto Serif JP", Georgia, serif;
+  --cds-font-size-caption: 12.5px;
+  --cds-font-size-body: 15px;
+  --cds-font-size-heading: 19px;
+  --cds-font-size-title: 30px;
+  --cds-font-weight-medium: 600;
+  --cds-gap-xs: 4px; --cds-gap-sm: 8px; --cds-gap-md: 14px; --cds-gap-lg: 20px; --cds-gap-xl: 28px;
+  --cds-pad-xs: 4px; --cds-pad-sm: 8px; --cds-pad-md: 14px; --cds-pad-lg: 20px; --cds-pad-xl: 32px;
+  --cds-radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --color-bg: #0f1116; --color-panel: #171a21; --color-fg: #e7e9ee; --color-fg-muted: #9aa1ae;
+    --color-border-line: #2a2f39; --color-ok: #5fbf8a; --color-warn: #e0a84a; --color-bad: #f07171;
+    --c1: #6f97ea; --c2: #eb9b55; --c3: #3fbac6; --c4: #ab88dc; --c5: #e56b62; --c6: #97b856; --c7: #8a93a1;
+    --cds-chart-muted: #5d6573; --cds-chart-grid: #232832; --cds-chart-axis: #3a404c; --cds-chart-reference: #7c8492;
+    --cds-chart-status-critical: #e56b62; --cds-text-secondary: #9aa1ae; --cds-surface-popover: #1d2129;
+    --cds-border: #333945; --cds-shadow-popover: 0 8px 28px rgba(0, 0, 0, 0.5);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: #0f1116; --color-panel: #171a21; --color-fg: #e7e9ee; --color-fg-muted: #9aa1ae;
+  --color-border-line: #2a2f39; --color-ok: #5fbf8a; --color-warn: #e0a84a; --color-bad: #f07171;
+  --c1: #6f97ea; --c2: #eb9b55; --c3: #3fbac6; --c4: #ab88dc; --c5: #e56b62; --c6: #97b856; --c7: #8a93a1;
+  --cds-chart-muted: #5d6573; --cds-chart-grid: #232832; --cds-chart-axis: #3a404c; --cds-chart-reference: #7c8492;
+  --cds-chart-status-critical: #e56b62; --cds-text-secondary: #9aa1ae; --cds-surface-popover: #1d2129;
+  --cds-border: #333945; --cds-shadow-popover: 0 8px 28px rgba(0, 0, 0, 0.5);
+}
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-anthropic-sans);
+  font-size: var(--cds-font-size-body);
+  line-height: 1.5;
+}
+#dash-root {
+  padding-block: 32px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+a { color: inherit; }
+.dash-skeleton {
+  display: inline-block;
+  min-width: 3ch;
+  color: transparent !important;
+  background: var(--color-border-line);
+  border-radius: 4px;
+}
