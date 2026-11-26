@@ -16,6 +16,9 @@ and detailed ICD-10 causes for 1995 and 2025).
 * **Share and download**: a link to each figure or explorer view, each chart as PNG, its data as CSV.
 * **Install and offline**: installable as an app (PWA); works without a connection after the first visit.
 
+**Video:** a 30-second explainer, [`video/japanjiko-explainer.mp4`](video/japanjiko-explainer.mp4)
+(1080p60, music and sound effects). Its source, data script and sources are in [`video/`](video/NOTES.md).
+
 ## Key findings (2025)
 
 | | 2008 | 2025 | Change |
@@ -56,6 +59,7 @@ data/raw/            source tables exactly as downloaded (e-Stat CSVs are Shift_
 data/*.csv           tidy datasets used by the app (UTF-8)
 scripts/             fetch_sources.py → build_datasets.py → build_site.py
 report/              the same report as a Claude dashboard page (text in index.html, charts in app.js)
+video/               explainer video: MP4, canvas film source, score, data script and NOTES.md
 ```
 
 ## Rebuild

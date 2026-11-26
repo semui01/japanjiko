@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Accidental Deaths in Japan, explainer</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+/* Preview shell only. The film is one canvas; ?render switches to frame-by-frame capture. */
+html,body{margin:0;height:100%;background:#05070d;color:#9aa3bf;font:13px/1.4 ui-monospace,monospace}
+body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}
+canvas{width:min(96vw,calc((100vh - 64px)*var(--ar,1.7778)));aspect-ratio:var(--ar,1.7778);display:block}
+.ctl{display:flex;gap:12px;align-items:center;width:min(96vw,calc((100vh - 64px)*var(--ar,1.7778)))}
+.ctl input{flex:1}
+.ctl button{font:inherit;color:#e8ebf5;background:#11162a;border:1px solid #262f4d;border-radius:6px;padding:4px 10px;cursor:pointer}
+body.render{display:block} body.render .ctl{display:none} body.render canvas{width:auto;aspect-ratio:auto}
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="Motion graphic: Accidental Deaths in Japan web app"></canvas>
+<div class="ctl"><button id="pp">Pause</button><input id="scrub" type="range" min="0" max="10" step="0.001" value="0"><span id="tc">0.00 s</span></div>
+<script src="engine.js"></script>
+<script src="data.js"></script>
+<script>
+/* Explainer for https://semui01.github.io/japanjiko — "Accidental deaths in Japan, 1899–2025".
+   Every number comes from data.js (written by data/prepare.py from the app's own data/*.csv). */
+(() => {
+'use strict';
+const {clamp, lerp, prog, bell, E, hash, rgba, mix, mixRGB, glow, add, rrect, solveTime, flash} = M;
+
+/* 1. Palette and type: the app's dark theme (docs/styles.css, prefers-color-scheme: dark). */
+const C = {bg:'#0f1116', panel:'#171a21', fg:'#e7e9ee', muted:'#9aa1ae', line:'#2a2f39', grid:'#232832', axis:'#3a404c',
+  refline:'#7c8492', mark:'#5d6573', dim:'#454b57', accent:'#6f97ea', bad:'#f07171', ok:'#5fbf8a',
+  traffic:'#6f97ea', falls:'#eb9b55', drowning:'#3fbac6', choking:'#ab88dc', fire:'#e56b62', poisoning:'#97b856', other:'#8a93a1', quake:'#e56b62'};
+Object.assign(T, {DISP:'"Gelasio", Georgia, serif', BODY:'"Inter", system-ui, sans-serif', MONO:'"Mono", ui-monospace, monospace', fg:C.fg, muted:C.muted, faint:'#5d6573'});
+const JP = '"JP Sans", "Inter", sans-serif', JPS = '"JP Serif", "Gelasio", serif', UIJ = '"Inter", "JP Sans", sans-serif';
+const W = 1920, H = 1080, DUR = 30.5;
+const film = Film.create({W, H, FPS:60, DUR, bg:C.bg, fadeIn:.3});
+
+/* 2. Master timing table. */
+const TM = {
+  sweep:[.1, 2.0], s1Out:3.0, zoom:[3.2, 4.2],
+  s2Head:3.6, dash:[3.9, 4.3], added:4.2, light:[4.5, 5.7], cap:5.75, s2Out:7.15,
+  split:[7.2, 7.55], morph:[7.85, 8.55], lines:[8.45, 9.05], labels:9.1, s3Head:7.75, s3Out:10.9,
+  fade3:[10.95, 11.35], tealOut:[11.3, 11.7], s4Head:11.45, axis4:[11.72, 12.1], rings:12.15, rise:12.7, val:13.6, s4Out:14.85,
+  bars5:15.25, s5Head:15.5, count5:[15.45, 16.4], dim5:[16.7, 17.1], s5Out:18.75,
+  win:[19.15, 19.75], s6Head:19.3, subA:19.6, subAOut:22.35, subB:22.75, s6Out:25.2,
+  clicks:[20.7, 21.5, 22.7, 23.85], toast:24.25, fly:[25.45, 26.05], fin:26.05, url:26.95, credit:27.15,
+};
+film.blur = [[TM.zoom[0], TM.zoom[1], 12], [TM.morph[0], TM.morph[1] + .1, 8], [TM.fly[0], TM.fly[1], 12]];
+
+/* 3. Data and precomputed layout. */
+const LR = DATA.longRun, BT = DATA.byType, F = DATA.facts, QK = new Set(F.quakes);
+const TYPES = ['traffic', 'falls', 'drowning', 'choking'];
+const fmt = v => Math.round(v).toLocaleString('en-US');
+const BASE = 900, CHH = 520;
+
+// S1→S3 chart: a right-anchored zoom from 1899–2025 (x 140–1780) to 1995–2025 (x 140–1640).
+const zoomE = t => E.inOutCubic(prog(t, ...TM.zoom));
+const xMapAt = t => { const e = zoomE(t), span = Math.exp(lerp(Math.log(127), Math.log(31), e)), R = lerp(1780, 1640, e);
+  return {x: y => R - (2025.5 - y) / span * (R - 140), ppy: (R - 140) / span}; };
+const vmaxAt = t => lerp(80000, 62000, zoomE(t));
+const XS = xMapAt(99).x;                                    // final mapping (S2, S3)
+const Y62 = v => BASE - v / 62000 * CHH, Y16 = v => BASE - v / 16000 * CHH;
+
+// S1 playhead: when each yearly bar pops.
+const sweepYear = t => 1898.6 + (2026.2 - 1898.6) * E.inOutSine(prog(t, ...TM.sweep));
+const popT = new Map(LR.map(([y]) => [y, solveTime(sweepYear, y, ...TM.sweep)]));
+// S2: 2009–2025 bars light up in turn.
+const litT = y => TM.light[0] + (y - 2009) * (TM.light[1] - TM.light[0]) / 16;
+
+function barBaseCol(y) { return QK.has(y) ? C.quake : C.accent; }
+function barCol(y, t) {
+  const base = barBaseCol(y), dimTo = QK.has(y) ? '#7a4a4a' : C.dim;
+  let c = mixRGB(base, dimTo, E.inOutCubic(prog(t, 3.95, 4.45)));
+  if (y >= 2009) c = mixRGB(c, base, E.outCubic(prog(t, litT(y), litT(y) + .25)));
+  return c;
+}
+
+/* 4. Scenes. */
+// ---------- S1–S3: one chart that zooms, recolours, splits and turns into lines (0 → 11.4 s)
+film.scene(0, 12.0, (ctx, t) => {
+  const xm = xMapAt(t), X = xm.x, vmax = vmaxAt(t), Yv = v => BASE - v / vmax * CHH, bw = xm.ppy * .72;
+  const axisA = 1 - prog(t, TM.fade3[0] + .3, TM.fade3[1] + .4);
+  // baseline
+  ctx.save(); ctx.globalAlpha *= axisA; ctx.strokeStyle = C.axis; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(130, BASE + 1); ctx.lineTo(lerp(1790, 1650, zoomE(t)), BASE + 1); ctx.stroke(); ctx.restore();
+
+  // S1 playhead glow
+  if (t > TM.sweep[0] && t < TM.sweep[1] + .3) {
+    const px = X(sweepYear(t)), a = bell(t, TM.sweep[0], TM.sweep[1] + .3);
+    add(ctx, () => { const g = ctx.createLinearGradient(0, 380, 0, BASE); g.addColorStop(0, rgba(C.accent, 0)); g.addColorStop(1, rgba(C.accent, .5 * a)); ctx.fillStyle = g; ctx.fillRect(px - 1.5, 380, 3, BASE - 380); glow(ctx, px, BASE, 70, C.accent, .35 * a); });
+  }
+  const split = y => E.inOutCubic(prog(t, TM.split[0] + (y - 1995) * .011, TM.split[0] + (y - 1995) * .011 + .3));
+  const morph = y => E.inOutCubic(prog(t, TM.morph[0] + (y - 1995) * .01, TM.morph[0] + (y - 1995) * .01 + .55));
+  // bars
+  if (t < TM.morph[1] + .5) for (const [y, v] of LR) {
+    const pp = prog(t, popT.get(y), popT.get(y) + .35); if (pp <= 0) continue;
+    const x = X(y), a = clamp((x - 120) / 30); if (a <= 0 || x > W + 40) continue;
+    const h = v / vmax * CHH * E.outCubic(pp), w = Math.max(2, bw);
+    ctx.save(); ctx.globalAlpha *= a;
+    if (y >= 1995 && t >= TM.split[0]) {
+      // S3: the yearly total splits into types, then each type collapses to a dot at its own value.
+      const i = BT.years.indexOf(y), sp = split(y), mp = morph(y), col0 = barCol(y, t);
+      let acc = 0;
+      const segs = TYPES.map(k => ({k, v: BT[k][i]})); segs.push({k: 'rest', v: BT.total[i] - TYPES.reduce((s, k) => s + BT[k][i], 0)});
+      for (const s of segs) {
+        const y0 = Y62(acc + s.v), y1 = Y62(acc); acc += s.v;
+        const tc = s.k === 'rest' ? C.dim : C[s.k], col = mix(col0, tc, sp);
+        if (s.k === 'rest') { ctx.save(); ctx.globalAlpha *= 1 - mp; ctx.fillStyle = col; ctx.fillRect(x - w / 2, y0, w, y1 - y0 - (sp > 0 ? 1.2 * sp : 0)); ctx.restore(); continue; }
+        if (mp <= 0) { ctx.fillStyle = col; ctx.fillRect(x - w / 2, y0, w, y1 - y0 - 1.2 * sp); continue; }
+        const cy = lerp((y0 + y1) / 2, Y16(s.v), mp), hh = lerp(y1 - y0, 9, mp), ww = lerp(w, 9, mp);
+        const fade = y === 2025 ? 1 : 1 - prog(t, TM.lines[0] + .2, TM.lines[1] + .1);
+        ctx.save(); ctx.globalAlpha *= fade; ctx.fillStyle = col; rrect(ctx, x - ww / 2, cy - hh / 2, ww, hh, Math.min(4.5, hh / 2) * mp); ctx.fill(); ctx.restore();
+      }
+    } else {
+      ctx.fillStyle = mix(barCol(y, t), barCol(y, t), 0);
+      ctx.fillRect(x - w / 2, BASE - h, w, h);
+    }
+    // pop flash on the bar head (S1) and when a bar lights up (S2)
+    const head = (1 - pp) * (pp > 0 ? 1 : 0) + (y >= 2009 ? bell(t, litT(y) - .02, litT(y) + .4) : 0);
+    if (head > .01 && t < TM.split[0]) add(ctx, () => glow(ctx, x, BASE - h, 26 + bw, barBaseCol(y), .55 * head));
+    ctx.restore();
+  }
+  // S1 axis years and earthquake labels
+  const a1 = 1 - prog(t, TM.zoom[0], TM.zoom[0] + .35);
+  [1900, 1950, 2000].forEach((y, k) => T.label(ctx, String(y), X(y), 938, `400 20px ${T.BODY}`, C.muted, a1 * prog(t, .25 + k * .5, .55 + k * .5), 'center'));
+  [[1923, 71322], [2011, 59416]].forEach(([y, v]) => {
+    const q = E.outCubic(prog(t, popT.get(y) + .15, popT.get(y) + .5)) * (1 - prog(t, TM.s1Out, TM.s1Out + .3));
+    T.label(ctx, `${y} earthquake`, X(y), Yv(v) - 16 + (1 - q) * 8, `500 20px ${T.BODY}`, mix(C.quake, C.fg, .35), q, 'center');
+  });
+  // S2–S3 axis years and the 2008 marker
+  const a2 = prog(t, TM.dash[0], TM.dash[1]) * (1 - prog(t, ...TM.fade3));
+  [1995, 2025].forEach(y => T.label(ctx, String(y), XS(y), 938, `400 20px ${T.BODY}`, C.muted, a2, 'center'));
+  const dp = E.outCubic(prog(t, ...TM.dash));
+  if (dp > 0 && t < TM.fade3[1]) {
+    const x8 = X(2008) + xm.ppy / 2;
+    ctx.save(); ctx.globalAlpha *= 1 - prog(t, ...TM.fade3); ctx.strokeStyle = rgba(C.refline, .9); ctx.lineWidth = 2; ctx.setLineDash([7, 7]);
+    ctx.beginPath(); ctx.moveTo(x8, BASE); ctx.lineTo(x8, lerp(BASE, 360, dp)); ctx.stroke(); ctx.restore();
+    const q = E.outCubic(prog(t, TM.added, TM.added + .3)) * (1 - prog(t, TM.s2Out, TM.s2Out + .3));
+    T.label(ctx, '2009–2025 ADDED', x8 + 16 + (1 - q) * 10, 378, `500 21px ${T.MONO}`, C.accent, q, 'left', '2.5px');
+  }
+  // S2 counter: 2008 → 2025, value of the latest lit bar (computed from the frame time: no ghosting)
+  const tq = M.frameT(t); let yr = 2008; for (let y = 2009; y <= 2025; y++) if (tq >= litT(y) + .1) yr = y;
+  const val = LR.find(r => r[0] === yr)[1];
+  const ca = prog(t, 4.35, 4.6) * (1 - prog(t, TM.s2Out, TM.s2Out + .3));
+  if (ca > 0) {
+    ctx.save(); ctx.globalAlpha *= ca;
+    T.tabular(ctx, fmt(val), 1780, 330, `400 100px ${T.DISP}`, C.fg, 56, 'right');
+    T.tabular(ctx, String(yr), 1432, 330, `500 26px ${T.MONO}`, yr === 2025 ? C.accent : C.muted, 16, 'right');
+    ctx.restore();
+    const cq = E.outCubic(prog(t, TM.cap, TM.cap + .3)) * (1 - prog(t, TM.s2Out, TM.s2Out + .3));
+    T.line(ctx, [{s:`+${F.vs2008}%`, f:`600 26px ${T.BODY}`, c:C.bad}, {s:' vs 2008', f:`400 26px ${T.BODY}`, c:C.muted}], 1780, 380, t, {t0:TM.cap, st:.04, rise:12, blur:8, align:'right', out:[TM.s2Out, .3]});
+    void cq;
+  }
+  // S3 lines, end dots and end labels
+  if (t >= TM.lines[0]) {
+    const lp = prog(t, ...TM.lines), lx = lerp(XS(1995), XS(2025), E.inOutCubic(lp));
+    const ends = {traffic:0, falls:0, drowning:0, choking:0};
+    TYPES.forEach(k => {
+      let a = 1 - prog(t, ...TM.fade3);
+      if (k === 'drowning') a = 1 - prog(t, ...TM.tealOut);
+      if (a <= 0) return;
+      const glowK = k === 'drowning' ? bell(t, TM.fade3[0], TM.tealOut[1]) : 0;
+      ctx.save(); ctx.globalAlpha *= a; ctx.translate(0, k === 'drowning' ? 30 * E.inCubic(prog(t, ...TM.tealOut)) : 0);
+      ctx.save(); ctx.beginPath(); ctx.rect(0, 0, lx + 2, H); ctx.clip();
+      ctx.strokeStyle = C[k]; ctx.lineWidth = 3.2 + glowK * 1.5; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      if (glowK > 0) { ctx.shadowColor = rgba(C[k], .8 * glowK); ctx.shadowBlur = 24; }
+      ctx.beginPath(); BT.years.forEach((y, i) => { const px = XS(y), py = Y16(BT[k][i]); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }); ctx.stroke(); ctx.restore();
+      const ex = XS(2025), ey = Y16(BT[k][BT.years.length - 1]);
+      ctx.fillStyle = C[k]; ctx.beginPath(); ctx.arc(ex, ey, 5.5, 0, 7); ctx.fill();
+      ctx.restore();
+    });
+    const names = {falls:'Falls', drowning:'Drowning', choking:'Choking', traffic:'Traffic'};
+    ['falls', 'drowning', 'choking', 'traffic'].forEach((k, j) => {
+      const q = E.outCubic(prog(t, TM.labels + j * .08, TM.labels + j * .08 + .3)) * (1 - prog(t, TM.s3Out, TM.s3Out + .3));
+      const v = BT[k][BT.years.length - 1];
+      T.label(ctx, `${names[k]} ${fmt(v)}`, XS(2025) + 18 + (1 - q) * 12, Y16(v) + 8, `600 23px ${T.BODY}`, C[k], q);
+    });
+  }
+  // headlines S1–S3
+  T.eyebrow(ctx, [{s:'MHLW', c:C.accent}, {s:' · VITAL STATISTICS OF JAPAN', c:C.muted}], 140, 132, t, .2, {size:22, out:[TM.s1Out, .3]});
+  T.line(ctx, [{s:'Accidental deaths in ', f:`400 80px ${T.DISP}`, c:C.fg}, {s:'Japan,', f:`italic 400 80px ${T.DISP}`, c:C.fg}, {s:' 1899–2025', f:`400 80px ${T.DISP}`, c:C.accent}], 136, 228, t, {t0:.3, st:.07, out:[TM.s1Out + .05, .35]});
+  T.line(ctx, [{s:'日本の不慮の事故死亡統計', f:`400 34px ${JPS}`, c:C.muted}], 140, 296, t, {t0:.85, out:[TM.s1Out + .05, .3]});
+  T.line(ctx, [{s:'A 2009 ministry report, ', f:`400 72px ${T.DISP}`, c:C.fg}, {s:'extended to 2025', f:`italic 400 72px ${T.DISP}`, c:C.accent, glow:[C.accent, .35, 26]}], 136, 200, t, {t0:TM.s2Head, st:.065, out:[TM.s2Out, .35]});
+  T.line(ctx, [{s:'Falls', f:`italic 400 72px ${T.DISP}`, c:C.falls}, {s:' and ', f:`400 72px ${T.DISP}`, c:C.fg}, {s:'drowning', f:`italic 400 72px ${T.DISP}`, c:C.drowning}, {s:' drove the rise', f:`400 72px ${T.DISP}`, c:C.fg}], 136, 200, t, {t0:TM.s3Head, st:.065, out:[TM.s3Out, .35]});
+});
+
+// ---------- S4: drowning rate per 100,000 by age, 2008 vs 2024
+const AG = DATA.drownRates, AX0 = 300, AX1 = 1580, acx = i => AX0 + 128 + i * 256, Ya = v => BASE - v / 60 * CHH;
+const riseT = i => TM.rise + i * .15;
+film.scene(11.3, 15.6, (ctx, t) => {
+  const ax = E.outCubic(prog(t, ...TM.axis4)), out = E.inCubic(prog(t, TM.s4Out, TM.s4Out + .4));
+  ctx.save(); ctx.globalAlpha *= 1 - out;
+  [0, 20, 40, 60].forEach(v => {
+    ctx.save(); ctx.globalAlpha *= ax; ctx.strokeStyle = v ? C.grid : C.axis; ctx.lineWidth = v ? 1.5 : 2;
+    ctx.beginPath(); ctx.moveTo(AX0, Ya(v)); ctx.lineTo(lerp(AX0, AX1, ax), Ya(v)); ctx.stroke(); ctx.restore();
+    T.label(ctx, String(v), AX0 - 14, Ya(v) + 7, `400 19px ${T.BODY}`, C.muted, ax, 'right');
+  });
+  T.label(ctx, 'per 100,000', AX0, 350, `500 20px ${T.BODY}`, C.muted, E.outCubic(prog(t, TM.axis4[0] + .2, TM.axis4[1] + .2)));
+  // legend
+  const lg1 = E.outCubic(prog(t, TM.rings, TM.rings + .3)), lg2 = E.outCubic(prog(t, TM.rise, TM.rise + .3));
+  if (lg1 > 0) { ctx.save(); ctx.globalAlpha *= lg1; ctx.strokeStyle = C.muted; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(AX1 - 196, 343, 8, 0, 7); ctx.stroke(); ctx.restore(); }
+  T.label(ctx, '2008', AX1 - 180, 350, `500 20px ${T.BODY}`, C.muted, lg1);
+  if (lg2 > 0) { ctx.save(); ctx.globalAlpha *= lg2; ctx.fillStyle = C.drowning; ctx.beginPath(); ctx.arc(AX1 - 76, 343, 9, 0, 7); ctx.fill(); ctx.restore(); }
+  T.label(ctx, '2024', AX1 - 60, 350, `600 20px ${T.BODY}`, C.drowning, lg2);
+  AG.forEach(([age, r08, r24], i) => {
+    const x = acx(i);
+    T.label(ctx, age, x, 944, `500 22px ${T.BODY}`, C.muted, E.outCubic(prog(t, TM.axis4[0] + .15 + i * .05, TM.axis4[0] + .45 + i * .05)), 'center');
+    const pr = prog(t, TM.rings + i * .07, TM.rings + i * .07 + .35); if (pr <= 0) return;
+    const ru = prog(t, riseT(i), riseT(i) + .55), rv = lerp(r08, r24, E.inOutCubic(ru)), y08 = Ya(r08), yv = Ya(rv);
+    if (ru > 0) {
+      ctx.strokeStyle = C.drowning; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x, y08 - 9); ctx.lineTo(x, Math.min(y08 - 9, yv + 6)); ctx.stroke();
+      add(ctx, () => glow(ctx, x, yv, 60, C.drowning, .35 * (1 - prog(t, riseT(i) + .45, riseT(i) + 1.2))));
+      ctx.fillStyle = C.drowning; ctx.beginPath(); ctx.arc(x, yv, 10 * E.outBack(clamp(ru * 3)), 0, 7); ctx.fill();
+    }
+    ctx.strokeStyle = C.muted; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x, y08, 9 * E.outBack(pr), 0, 7); ctx.stroke();
+    ctx.strokeStyle = rgba(C.muted, .45 * (1 - pr)); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y08, 9 + 18 * E.outCubic(pr), 0, 7); ctx.stroke();
+  });
+  // 80–84 example values
+  const i84 = 3, [, r08, r24] = AG[i84];
+  T.line(ctx, [{s:String(r08), f:`500 24px ${T.BODY}`, c:C.muted}, {s:' → ', f:`500 24px ${T.BODY}`, c:C.muted}, {s:String(r24), f:`700 24px ${T.BODY}`, c:C.drowning}], acx(i84) + 26, (Ya(r08) + Ya(r24)) / 2 + 8, t, {t0:TM.val, st:.06, rise:10, blur:6, out:[TM.s4Out, .3]});
+  ctx.restore();
+  T.line(ctx, [{s:'Drowning', f:`italic 400 72px ${T.DISP}`, c:C.drowning, glow:[C.drowning, .3, 24]}, {s:' rates rose at every age 65–89', f:`400 72px ${T.DISP}`, c:C.fg}], 136, 200, t, {t0:TM.s4Head, st:.065, out:[TM.s4Out, .35]});
+});
+
+// ---------- S5: 2025 deaths by age group, stacked by type
+const STK = DATA.age25.stack, ROWS = DATA.age25.rows;
+const grp = (name, names) => { const rs = ROWS.filter(r => names.includes(r[0])); return {name, total: rs.reduce((s, r) => s + r[1], 0), segs: STK.map((k, j) => rs.reduce((s, r) => s + r[2 + j], 0))}; };
+const G5 = [grp('Under 65', ['0', '1–4', '5–9', '10–14', '15–29', '30–44', '45–64']), grp('65–79', ['65–79']), grp('80 and over', ['80 and over'])];
+const BX0 = 420, BX1 = 1640, bscale = (BX1 - BX0) / G5[2].total, rowY = i => 560 + i * 128, BHh = 76;
+film.scene(15.2, 19.8, (ctx, t) => {
+  const shrink = E.inOutCubic(prog(t, TM.s5Out, TM.s5Out + .45));
+  ctx.save(); ctx.globalAlpha *= 1 - shrink;
+  ctx.translate(960, 650); ctx.scale(1 - .25 * shrink, 1 - .25 * shrink); ctx.translate(-960, -650 + 40 * shrink);
+  G5.forEach((g, i) => {
+    const t0 = TM.bars5 + i * .14, gp = E.outCubic(prog(t, t0, t0 + .75)); if (prog(t, t0, t0 + .75) <= 0) return;
+    const dim = i === 0 ? 1 - .55 * E.inOutCubic(prog(t, ...TM.dim5)) : 1, y = rowY(i), wTot = g.total * bscale * gp;
+    ctx.save(); ctx.globalAlpha *= dim;
+    let x = BX0;
+    g.segs.forEach((v, j) => { const w = v * bscale; const vis = clamp(BX0 + wTot - x, 0, w); if (vis > 0) { ctx.fillStyle = C[STK[j]]; ctx.fillRect(x, y - BHh / 2, Math.max(0, vis - (vis === w && w > 3 ? 1.5 : 0)), BHh); } x += w; });
+    ctx.restore();
+    const lq = E.outCubic(prog(t, t0 + .1, t0 + .45)) * dim;
+    T.label(ctx, g.name, BX0 - 24, y + 9, `500 26px ${T.BODY}`, C.fg, lq, 'right');
+    const vq = E.outCubic(prog(t, t0 + .65, t0 + .95)) * dim;
+    T.label(ctx, fmt(g.total), BX0 + g.total * bscale + 16, y + 9, `600 24px ${T.BODY}`, C.fg, vq);
+  });
+  // bracket over the two 65+ rows
+  const bq = E.inOutCubic(prog(t, TM.dim5[0], TM.dim5[1] + .2));
+  if (bq > 0) {
+    const bx = 1772, ya = rowY(1) - BHh / 2, yb = rowY(2) + BHh / 2, ym = (ya + yb) / 2, hh = (yb - ya) / 2 * bq;
+    ctx.strokeStyle = rgba(C.accent, .9); ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(bx - 12, ym - hh); ctx.lineTo(bx, ym - hh); ctx.lineTo(bx, ym + hh); ctx.lineTo(bx - 12, ym + hh); ctx.stroke();
+  }
+  ctx.restore();
+  // headline: counter + line
+  const tq = M.frameT(t), cv = F.share65 * E.outCubic(prog(tq, ...TM.count5));
+  const ca = prog(t, TM.count5[0] - .05, TM.count5[0] + .2) * (1 - prog(t, TM.s5Out, TM.s5Out + .3));
+  if (ca > 0) { ctx.save(); ctx.globalAlpha *= ca; T.tabular(ctx, cv.toFixed(1) + '%', 140, 318, `400 150px ${T.DISP}`, C.accent, 84); ctx.restore(); }
+  T.line(ctx, [{s:'were aged 65 or over', f:`400 64px ${T.DISP}`, c:C.fg}], 600, 250, t, {t0:TM.s5Head, st:.065, out:[TM.s5Out, .35]});
+  T.line(ctx, [{s:'of all accidental deaths in 2025', f:`400 28px ${T.BODY}`, c:C.muted}], 604, 306, t, {t0:TM.s5Head + .3, st:.03, rise:14, blur:8, out:[TM.s5Out, .3]});
+});
+
+// ---------- S6: the app itself (redrawn from its dark theme; UI text drawn as part of the picture)
+const X0 = 140, Y0 = 262, WW = 1640, WH = 700;
+const L = {
+  en: {brand:'Accidental Deaths in Japan', sub:'Vital statistics, 1899–2025', nav:['Report', 'Data explorer'], lang:'日本語', causes:'Causes',
+    chips:{total:'All accidents', traffic:'Traffic', falls:'Falls', drowning:'Drowning', choking:'Choking', fire:'Smoke and fire', poisoning:'Poisoning', other:'Other'},
+    sex:'Sex', sexV:'Both sexes', age:'Age group', ageV:'All ages', measure:'Measure', meas:['Deaths', 'Rate per 100,000'], from:'From', to:'To',
+    title:'Deaths, Both sexes, All ages, 1995–2025', toast:'Saved for offline use', font:T.BODY},
+  ja: {brand:'日本の不慮の事故死亡統計', sub:'人口動態統計 1899〜2025年', nav:['レポート', 'データ探索'], lang:'English', causes:'死因',
+    chips:{total:'不慮の事故（総数）', traffic:'交通事故', falls:'転倒・転落・墜落', drowning:'溺死・溺水', choking:'窒息', fire:'煙・火災', poisoning:'中毒', other:'その他'},
+    sex:'性別', sexV:'男女計', age:'年齢階級', ageV:'全年齢', measure:'指標', meas:['死亡数', '死亡率（人口10万対）'], from:'開始年', to:'終了年',
+    title:'死亡数・男女計・全年齢（1995〜2025年）', toast:'オフラインでも利用できます', font:UIJ},
+};
+const CH_ORDER = ['total', 'traffic', 'falls', 'drowning', 'choking', 'fire', 'poisoning', 'other'];
+const SX = X0 + 24, SY = Y0 + 88, SW = 360, SH = 556, CX = X0 + 408, CY = Y0 + 88, CW = 1208, CHt = 556;
+const mctx = document.createElement('canvas').getContext('2d');
+function measure(s, font) { mctx.font = font; return mctx.measureText(s).width; }
+function chipLayout(lang) {
+  const l = L[lang], out = {}; let x = SX + 20, y = SY + 58;
+  for (const k of CH_ORDER) { const w = 14 + 16 + 8 + measure(l.chips[k], `500 16px ${l.font}`) + 14; if (x + w > SX + SW - 18) { x = SX + 20; y += 44; } out[k] = {x, y, w, h:34}; x += w + 8; }
+  return out;
+}
+const CHIPS = {en: chipLayout('en'), ja: chipLayout('ja')};
+function navLayout(lang) {
+  const l = L[lang], f = `500 17px ${l.font}`, lw = measure(l.lang, f) + 32, lx = X0 + WW - 24 - lw;
+  const n1w = measure(l.nav[1], f) + 28, n1x = lx - 22 - n1w, n0w = measure(l.nav[0], f) + 28, n0x = n1x - 6 - n0w;
+  return {lang:{x:lx, w:lw}, n0:{x:n0x, w:n0w}, n1:{x:n1x, w:n1w}};
+}
+const NAV = {en: navLayout('en'), ja: navLayout('ja')};
+const BTN = {csv:{x:CX + CW - 24 - 58, w:58}, png:{x:CX + CW - 24 - 58 - 8 - 58, w:58}, link:{x:CX + CW - 24 - 124 - 8 - 38, w:38}, y:CY + 20, h:34};
+// which causes are selected, and when each line draws
+const SEL = {traffic:[TM.win[0] + .3, TM.win[0] + .9], falls:[TM.clicks[0] + .05, TM.clicks[0] + .65], drowning:[TM.clicks[1] + .05, TM.clicks[1] + .65]};
+const PX0 = CX + 92, PX1 = CX + CW - 120, PY0 = CY + 128, PY1 = CY + 500;
+const pxY = y => PX0 + (y - 1995) / 30 * (PX1 - PX0), pyV = v => PY1 - v / 16000 * (PY1 - PY0);
+function ui(ctx, s, x, y, font, col, align = 'left') { ctx.font = font; ctx.fillStyle = col; ctx.textAlign = align; ctx.textBaseline = 'alphabetic'; ctx.fillText(s, x, y); }
+function pill(ctx, x, y, w, h, fill, stroke, lw = 1.5) { rrect(ctx, x, y, w, h, h / 2); if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke(); } }
+function brandMark(ctx, x, y, s, barP = 1) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s / 32, s / 32);
+  ctx.fillStyle = C.accent; rrect(ctx, 0, 0, 32, 32, 8); ctx.fill();
+  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  [[8, 15], [13, 10], [18, 13], [23, 7]].forEach(([bx, top], i) => { const p = E.outBack(clamp((barP - i * .12) / .52)); if (p <= 0) return; ctx.beginPath(); ctx.moveTo(bx, 23); ctx.lineTo(bx, 23 - (23 - top) * p); ctx.stroke(); });
+  ctx.restore();
+}
+function drawLangUI(ctx, t, lang, a) {
+  if (a <= 0) return; const l = L[lang], fo = l.font, nv = NAV[lang], ch = CHIPS[lang];
+  ctx.save(); ctx.globalAlpha *= a;
+  // app bar text
+  ui(ctx, l.brand, X0 + 72, Y0 + 30, `600 19px ${fo}`, C.fg); ui(ctx, l.sub, X0 + 72, Y0 + 51, `400 15px ${fo}`, C.muted);
+  ui(ctx, l.nav[0], nv.n0.x + 14, Y0 + 38, `500 17px ${fo}`, C.muted);
+  pill(ctx, nv.n1.x, Y0 + 14, nv.n1.w, 36, C.bg, C.line); ui(ctx, l.nav[1], nv.n1.x + 14, Y0 + 38, `500 17px ${fo}`, C.fg);
+  pill(ctx, nv.lang.x, Y0 + 14, nv.lang.w, 36, null, C.line); ui(ctx, l.lang, nv.lang.x + nv.lang.w / 2, Y0 + 38, `500 17px ${lang === 'en' ? JP : T.BODY}`, C.fg, 'center');
+  // sidebar
+  ui(ctx, l.causes, SX + 20, SY + 40, `600 15px ${fo}`, C.fg);
+  for (const k of CH_ORDER) {
+    const c = ch[k], on = SEL[k] && t >= SEL[k][0] - .05, press = TM.clicks.some((ck, j) => j < 2 && Math.abs(t - ck) < .12 && ((j === 0 && k === 'falls') || (j === 1 && k === 'drowning')));
+    ctx.save(); if (press) { ctx.translate(c.x + c.w / 2, c.y + c.h / 2); ctx.scale(.94, .94); ctx.translate(-c.x - c.w / 2, -c.y - c.h / 2); }
+    pill(ctx, c.x, c.y, c.w, c.h, null, on ? rgba(C.fg, .85) : C.line, on ? 2 : 1.5);
+    ctx.strokeStyle = k === 'total' ? C.fg : C[k]; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(c.x + 14, c.y + 17); ctx.lineTo(c.x + 28, c.y + 17); ctx.stroke();
+    ui(ctx, l.chips[k], c.x + 38, c.y + 23, `${on ? 600 : 400} 16px ${fo}`, on ? C.fg : C.muted); ctx.restore();
+  }
+  const fy = SY + 58 + 44 * 4 + 22;
+  [[l.sex, l.sexV], [l.age, l.ageV]].forEach(([lab, v], j) => {
+    const yy = fy + j * 84; ui(ctx, lab, SX + 20, yy, `600 15px ${fo}`, C.fg);
+    rrect(ctx, SX + 20, yy + 12, SW - 40, 42, 8); ctx.fillStyle = '#12151b'; ctx.fill(); ctx.strokeStyle = C.line; ctx.lineWidth = 1.5; ctx.stroke();
+    ui(ctx, v, SX + 34, yy + 39, `400 16px ${fo}`, C.fg);
+    ctx.strokeStyle = C.muted; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(SX + SW - 46, yy + 29); ctx.lineTo(SX + SW - 40, yy + 35); ctx.lineTo(SX + SW - 34, yy + 29); ctx.stroke();
+  });
+  const my = fy + 168; ui(ctx, l.measure, SX + 20, my, `600 15px ${fo}`, C.fg);
+  rrect(ctx, SX + 20, my + 12, SW - 40, 40, 8); ctx.strokeStyle = C.line; ctx.lineWidth = 1.5; ctx.stroke();
+  const m0w = measure(l.meas[0], `600 15px ${fo}`) + 26; rrect(ctx, SX + 21, my + 13, m0w, 38, 7); ctx.fillStyle = C.bg; ctx.fill(); ctx.strokeStyle = C.line; ctx.stroke();
+  ui(ctx, l.meas[0], SX + 34, my + 38, `600 15px ${fo}`, C.fg); ui(ctx, l.meas[1], SX + 34 + m0w, my + 38, `400 15px ${fo}`, C.muted);
+  // chart panel text
+  ui(ctx, l.title, CX + 24, CY + 46, `600 19px ${fo}`, C.fg);
+  let lx = CX + 24; ['falls', 'drowning', 'choking', 'traffic'].forEach(k => {
+    const on = SEL[k] && t >= SEL[k][0]; if (!on) return; const q = clamp(prog(t, SEL[k][0], SEL[k][0] + .3));
+    ctx.save(); ctx.globalAlpha *= q; ctx.strokeStyle = C[k]; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(lx, CY + 88); ctx.lineTo(lx + 14, CY + 88); ctx.stroke();
+    ui(ctx, l.chips[k], lx + 22, CY + 94, `400 16px ${fo}`, C.fg); ctx.restore(); lx += 22 + measure(l.chips[k], `400 16px ${fo}`) + 26;
+  });
+  ctx.restore();
+}
+function drawApp(ctx, t, markShown = true) {
+  const lp = E.inOutCubic(prog(t, TM.clicks[2] + .05, TM.clicks[2] + .4));
+  // window frame
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = 60; ctx.shadowOffsetY = 18;
+  rrect(ctx, X0, Y0, WW, WH, 16); ctx.fillStyle = C.bg; ctx.fill(); ctx.restore();
+  add(ctx, () => glow(ctx, X0 + WW / 2, Y0 - 40, 900, C.accent, .05, .5));
+  ctx.save(); rrect(ctx, X0, Y0, WW, WH, 16); ctx.clip();
+  ctx.fillStyle = C.panel; ctx.fillRect(X0, Y0, WW, 64); ctx.fillStyle = C.line; ctx.fillRect(X0, Y0 + 64, WW, 1.5);
+  if (markShown) brandMark(ctx, X0 + 24, Y0 + 15, 34);
+  rrect(ctx, SX, SY, SW, SH, 12); ctx.fillStyle = C.panel; ctx.fill(); ctx.strokeStyle = C.line; ctx.lineWidth = 1.5; ctx.stroke();
+  rrect(ctx, CX, CY, CW, CHt, 12); ctx.fillStyle = C.panel; ctx.fill(); ctx.stroke();
+  // buttons
+  const csvP = bell(t, TM.clicks[3] - .02, TM.clicks[3] + .5);
+  [['link', ''], ['png', 'PNG'], ['csv', 'CSV']].forEach(([k, s]) => {
+    const b = BTN[k]; pill(ctx, b.x, BTN.y, b.w, BTN.h, k === 'csv' && csvP > 0 ? rgba(C.accent, .35 * csvP) : null, k === 'csv' ? mix(C.line, C.accent, csvP) : C.line);
+    if (s) ui(ctx, s, b.x + b.w / 2, BTN.y + 22, `600 13px ${T.BODY}`, C.fg, 'center');
+    else { ctx.strokeStyle = C.fg; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.arc(b.x + 15, BTN.y + 19, 4.5, 0, 7); ctx.moveTo(b.x + 27, BTN.y + 15); ctx.arc(b.x + 23, BTN.y + 15, 4.5, 0, 7); ctx.stroke(); }
+  });
+  // download arrow after the CSV click
+  const dq = prog(t, TM.clicks[3] + .1, TM.clicks[3] + .7);
+  if (dq > 0 && dq < 1) { const bx = BTN.csv.x + BTN.csv.w / 2, by = BTN.y + 46 + 26 * E.outCubic(dq); ctx.save(); ctx.globalAlpha *= bell(dq, 0, 1); ctx.strokeStyle = C.accent; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(bx, by - 18); ctx.lineTo(bx, by); ctx.moveTo(bx - 8, by - 8); ctx.lineTo(bx, by); ctx.lineTo(bx + 8, by - 8); ctx.moveTo(bx - 11, by + 8); ctx.lineTo(bx + 11, by + 8); ctx.stroke(); ctx.restore(); }
+  // plot: grid, ticks, lines
+  [0, 5000, 10000, 15000].forEach(v => { ctx.strokeStyle = v ? C.grid : C.axis; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(PX0, pyV(v)); ctx.lineTo(PX1, pyV(v)); ctx.stroke(); ui(ctx, v.toLocaleString('en-US'), PX0 - 12, pyV(v) + 5, `400 14px ${T.BODY}`, C.muted, 'right'); });
+  for (let y = 1995; y <= 2025; y += 5) ui(ctx, String(y), pxY(y), PY1 + 26, `400 14px ${T.BODY}`, C.muted, 'center');
+  ['falls', 'drowning', 'choking', 'traffic'].forEach(k => {
+    if (!SEL[k]) return; const p = E.inOutCubic(prog(t, ...SEL[k])); if (p <= 0) return;
+    ctx.save(); ctx.beginPath(); ctx.rect(PX0 - 4, PY0 - 40, (PX1 - PX0) * p + 8, PY1 - PY0 + 60); ctx.clip();
+    ctx.strokeStyle = C[k]; ctx.lineWidth = 2.6; ctx.lineJoin = 'round'; ctx.beginPath(); BT.years.forEach((y, i) => { const px = pxY(y), py = pyV(BT[k][i]); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }); ctx.stroke(); ctx.restore();
+    const hx = PX0 + (PX1 - PX0) * p, hi = Math.min(BT.years.length - 1, Math.round(p * 30)), hv = BT[k][hi];
+    if (p < 1) add(ctx, () => glow(ctx, hx, pyV(hv), 26, C[k], .6));
+    else { const ev = BT[k][30]; ctx.fillStyle = C[k]; ctx.beginPath(); ctx.arc(PX1, pyV(ev), 4.5, 0, 7); ctx.fill(); ui(ctx, ev.toLocaleString('en-US'), PX1 + 12, pyV(ev) + 5, `700 15px ${T.BODY}`, C[k]); }
+  });
+  drawLangUI(ctx, t, 'en', 1 - lp); drawLangUI(ctx, t, 'ja', lp);
+  // offline toast
+  const tq = E.outCubic(prog(t, TM.toast, TM.toast + .35));
+  if (tq > 0) {
+    const l = L.ja, f = `500 17px ${l.font}`, tw = measure(l.toast, f) + 64, tx = X0 + WW / 2 - tw / 2, ty = Y0 + WH - 58 + (1 - tq) * 20;
+    ctx.save(); ctx.globalAlpha *= tq; pill(ctx, tx, ty, tw, 46, '#1d2129', '#333945'); ctx.strokeStyle = C.ok; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(tx + 22, ty + 23); ctx.lineTo(tx + 28, ty + 29); ctx.lineTo(tx + 38, ty + 17); ctx.stroke(); ui(ctx, l.toast, tx + 48, ty + 29, f, C.fg); ctx.restore();
+  }
+  ctx.restore();
+  ctx.save(); rrect(ctx, X0, Y0, WW, WH, 16); ctx.strokeStyle = '#333945'; ctx.lineWidth = 1.5; ctx.stroke(); ctx.restore();
+}
+// cursor path (centres of the things it clicks, English layout; the CSV button does not move)
+const chipC = k => ({x: CHIPS.en[k].x + CHIPS.en[k].w / 2 + 6, y: CHIPS.en[k].y + 20});
+const CUR = [
+  {t:19.9, x:X0 + 980, y:Y0 + 520}, {t:TM.clicks[0] - .12, ...chipC('falls')}, {t:TM.clicks[0] + .25, ...chipC('falls')},
+  {t:TM.clicks[1] - .12, ...chipC('drowning')}, {t:TM.clicks[1] + .45, ...chipC('drowning')},
+  {t:TM.clicks[2] - .12, x:NAV.en.lang.x + NAV.en.lang.w / 2 + 4, y:Y0 + 36}, {t:TM.clicks[2] + .4, x:NAV.en.lang.x + NAV.en.lang.w / 2 + 4, y:Y0 + 36},
+  {t:TM.clicks[3] - .12, x:BTN.csv.x + BTN.csv.w / 2 + 4, y:BTN.y + 21}, {t:TM.clicks[3] + .3, x:BTN.csv.x + BTN.csv.w / 2 + 4, y:BTN.y + 21}, {t:24.9, x:BTN.csv.x - 60, y:BTN.y + 150},
+];
+function curAt(t) { let i = 0; while (i < CUR.length - 2 && t >= CUR[i + 1].t) i++; const a = CUR[i], b = CUR[i + 1], p = E.inOutCubic(prog(t, a.t, b.t)); return {x: lerp(a.x, b.x, p), y: lerp(a.y, b.y, p)}; }
+function drawCursor(ctx, t) {
+  const a = prog(t, 19.9, 20.15) * (1 - prog(t, 24.6, 24.9)); if (a <= 0) return;
+  const p = curAt(t); let sc = 1.3;
+  TM.clicks.forEach(ck => { const d = t - ck; if (d > -.08 && d < .5) { sc *= 1 - .14 * bell(d, -.08, .14); const rp = prog(d, 0, .5); if (rp > 0) { ctx.save(); ctx.globalAlpha *= a * (1 - rp); ctx.strokeStyle = C.accent; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(p.x, p.y, 8 + 30 * E.outCubic(rp), 0, 7); ctx.stroke(); ctx.restore(); } } });
+  ctx.save(); ctx.globalAlpha *= a; ctx.translate(p.x, p.y); ctx.scale(sc, sc);
+  ctx.beginPath(); [[0, 0], [0, 22], [6, 17], [10, 26], [14, 24], [10, 15.5], [17, 15.5]].forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath();
+  ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 8; ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.shadowBlur = 0; ctx.strokeStyle = '#0f1116'; ctx.lineWidth = 1.4; ctx.lineJoin = 'round'; ctx.stroke(); ctx.restore();
+}
+film.scene(TM.win[0], TM.fin + .1, (ctx, t) => {
+  const wp = E.outCubic(prog(t, ...TM.win)), wo = E.inOutCubic(prog(t, TM.fly[0] - .05, TM.fly[0] + .4));
+  ctx.save(); ctx.globalAlpha *= wp * (1 - wo);
+  const s = lerp(.94, 1, wp) * lerp(1, .97, wo); ctx.translate(960, Y0 + WH / 2); ctx.scale(s, s); ctx.translate(-960, -(Y0 + WH / 2) + 30 * (1 - wp));
+  drawApp(ctx, t, t < TM.fly[0]); drawCursor(ctx, t); ctx.restore();
+  T.line(ctx, [{s:'Explore it ', f:`400 72px ${T.DISP}`, c:C.fg}, {s:'yourself', f:`italic 400 72px ${T.DISP}`, c:C.accent, glow:[C.accent, .35, 26]}], 136, 166, t, {t0:TM.s6Head, st:.07, out:[TM.s6Out, .35]});
+  T.line(ctx, [{s:'Any cause, sex, age and year', f:`400 28px ${T.BODY}`, c:C.muted}], 140, 220, t, {t0:TM.subA, st:.03, rise:14, blur:8, out:[TM.subAOut, .3]});
+  T.line(ctx, [{s:'日本語', f:`500 28px ${JP}`, c:C.fg}, {s:' or English · PNG · CSV · offline', f:`400 28px ${T.BODY}`, c:C.muted}], 140, 220, t, {t0:TM.subB, st:.03, rise:14, blur:8, out:[TM.s6Out, .3]});
+});
+
+// ---------- S7: end card; the app's mark flies out of the app bar
+const MK = {x:140, y:356, s:132};
+film.scene(TM.fly[0], DUR, (ctx, t) => {
+  const bgA = E.inOutCubic(prog(t, TM.fin - .15, TM.fin));
+  const push = 1 + .02 * E.outCubic(prog(t, TM.fin, DUR)); ctx.translate(140, 590); ctx.scale(push, push); ctx.translate(-140, -590);
+  if (bgA > 0) add(ctx, () => glow(ctx, MK.x + MK.s / 2, MK.y + MK.s / 2, 700, C.accent, .07 * bgA, .5));
+  // flying mark
+  const fp = E.inOutCubic(prog(t, ...TM.fly)), sz = Math.exp(lerp(Math.log(34), Math.log(MK.s), fp));
+  const wsc = 1 * lerp(1, .97, E.inOutCubic(prog(t, TM.fly[0] - .05, TM.fly[0] + .4)));
+  const sx = 960 + (X0 + 24 - 960) * wsc, sy = Y0 + WH / 2 + (Y0 + 15 - (Y0 + WH / 2)) * wsc;
+  const mx = lerp(sx, MK.x, fp), my = lerp(sy, MK.y, fp) - 120 * Math.sin(Math.PI * fp);
+  brandMark(ctx, mx, my, sz, t < TM.fin ? 1 : .0 + prog(t, TM.fin + .05, TM.fin + .75));
+  T.line(ctx, [{s:'Accidental Deaths in ', f:`400 92px ${T.DISP}`, c:C.fg}, {s:'Japan', f:`italic 400 92px ${T.DISP}`, c:C.accent}], 312, 442, t, {t0:TM.fin + .1, st:.07, rise:40, blur:16});
+  T.line(ctx, [{s:'日本の不慮の事故死亡統計', f:`400 36px ${JPS}`, c:C.muted}, {s:'  1899〜2025年', f:`400 36px ${JPS}`, c:C.muted}], 316, 500, t, {t0:TM.fin + .4, st:.08, rise:16, blur:10});
+  const dl = E.inOutCubic(prog(t, TM.fin + .5, TM.fin + .95)); ctx.fillStyle = rgba(C.accent, .7); ctx.fillRect(140, 616, 1640 * dl, 2);
+  const uq = E.outCubic(prog(t, TM.url, TM.url + .4));
+  if (uq > 0) { const uw = T.line(ctx, [{s:'semui01.github.io/japanjiko', f:`600 48px ${T.BODY}`, c:C.fg}], 140, 716, t, {t0:TM.url, st:.05, rise:18, blur:10}); T.arrow(ctx, 140 + uw + 18, 716, 46, 48, rgba(C.accent, uq)); }
+  T.line(ctx, [{s:'Data: MHLW Vital Statistics, via e-Stat', f:`400 26px ${T.BODY}`, c:C.muted}], 140, 774, t, {t0:TM.credit, st:.03, rise:12, blur:8});
+});
+
+/* 5. Overlays */
+film.overlay((ctx, t) => {
+  flash(ctx, t, TM.fin, MK.x + MK.s / 2, MK.y + MK.s / 2, {color:C.accent, strength:.6, r:560});
+});
+
+/* 6. Cues for the score */
+const decades = []; for (let y = 1900; y <= 2020; y += 10) decades.push(solveTime(sweepYear, y, ...TM.sweep));
+const lit = []; for (let y = 2009; y <= 2025; y++) lit.push(litT(y));
+film.cues = {
+  decades, quakes:F.quakes.map(y => popT.get(y) + .03), quakeVals:F.quakes.map(y => LR.find(r => r[0] === y)[1]),
+  zoom:TM.zoom, dash:TM.dash[0], added:TM.added, lit, litVals:lit.map((_, i) => LR.find(r => r[0] === 2009 + i)[1]), counterLand:TM.light[1] + .1, cap:TM.cap,
+  split:TM.split[0], morph:TM.morph, lines:TM.lines, endLabels:[0, 1, 2, 3].map(j => TM.labels + j * .08), endVals:['falls', 'drowning', 'choking', 'traffic'].map(k => BT[k][30]),
+  fade3:TM.fade3[0], rings:AG.map((_, i) => TM.rings + i * .07), rises:AG.map((_, i) => riseT(i) + .05), riseVals:AG.map(r => r[2]), val:TM.val,
+  bars5:G5.map((_, i) => TM.bars5 + i * .14), count5Land:TM.count5[1], dim5:TM.dim5[0],
+  win:TM.win[0], clicks:TM.clicks, lineDraws:[SEL.traffic[0], SEL.falls[0], SEL.drowning[0]], langFlip:TM.clicks[2] + .05, toast:TM.toast,
+  fly:TM.fly, fin:TM.fin, markBars:[0, 1, 2, 3].map(i => TM.fin + .05 + (i * .12) * .7), url:TM.url,
+  heads:[.3, TM.s2Head, TM.s3Head, TM.s4Head, TM.s5Head, TM.s6Head],
+  scenes:[0, 3.2, 7.2, 11.0, 15.0, 19.0, 26.05],
+  transitions:[TM.zoom, [TM.split[0], TM.lines[1]], [TM.fade3[0], TM.axis4[1]], [TM.s4Out, TM.bars5 + .5], [TM.s5Out, TM.win[1] + .1], [TM.fly[0], TM.fin + .3]],
+  sync:['clicks', 'rises'],
+};
+
+film.start([`400 40px ${T.DISP}`, `italic 400 40px ${T.DISP}`, `400 20px ${T.BODY}`, `500 20px ${T.BODY}`, `600 20px ${T.BODY}`, `700 20px ${T.BODY}`, `500 20px ${T.MONO}`, `400 20px "JP Sans"`, `500 20px "JP Sans"`, `400 20px "JP Serif"`]);
+})();
+</script>
+</body>
+</html>
